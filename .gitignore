@@ -1,0 +1,8 @@
+.*
+!.gitignore
+*~
+*.[oa]
+KycMangement/Servers2/
+bin/
+*/target/
+node_modules/
