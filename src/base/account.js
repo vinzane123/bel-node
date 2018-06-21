@@ -577,6 +577,11 @@ Account.prototype.createTables = function (cb) {
         type: "String",
         length: 20,
         not_null: true
+      }, {
+        name: "merchantWalletAddress",
+        type: "String",
+        length: 64,
+        not_null: false
       }
     ],
     foreignKeys: [

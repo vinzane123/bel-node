@@ -30,8 +30,12 @@ module.exports = {
     account: 0,
     disableAccount: 0,
     attachWallets: {
-      BEL: 1,
-      NON_BEL: 2
+      BEL: 0,
+      NON_BEL: 0
+    },
+    attachMerchantWallets: {
+      BEL: 0,
+      NON_BEL: 0
     }
   },
   blockHeightInterval: 2100000,

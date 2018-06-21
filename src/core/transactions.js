@@ -188,7 +188,7 @@ function InitialTransfer() {
   }
 
   this.process = function (trs, sender, cb) {
-    library.dbLite.query("SELECT type, amount FROM trs WHERE type='"+trs.type+"' AND recipientId='"+trs.recipientId+"'", {}, ['type', 'amount'], function(err, rows) {
+    /*library.dbLite.query("SELECT type, amount FROM trs WHERE type='"+trs.type+"' AND recipientId='"+trs.recipientId+"'", {}, ['type', 'amount'], function(err, rows) {
       var amount = 0;
       rows.forEach(function(row, index) {
         amount += parseInt(row.amount);
@@ -197,14 +197,14 @@ function InitialTransfer() {
       var totalAmount = amount + trs.amount; 
       if(totalAmount > constants.initialAmount) {
         return cb('Initial amount exceeds, your amount transfer remaining: '+ (constants.initialAmount-amount));
-      }
+      }*/
       var key = sender.address + ':' + trs.type
       if (library.oneoff.has(key)) {
         return setImmediate(cb, 'Double submit')
       }
       library.oneoff.set(key, true);
       setImmediate(cb, null, trs);
-    });
+    //});
   }
 
   this.getBytes = function (trs) {
@@ -533,7 +533,9 @@ private.attachApi = function () {
     "put /addNewWallet": "addNewWallet",
     "put /initial": "initialTransactions",
     "get /wallet/info": "getWalletInfo",
-    "put /attach/belWallet": "attachBellWallet"
+    "put /attach/belWallet": "attachBellWallet",
+    'get /attached/wallets': "getAttachedWallets",
+    "put /merchant/attach/wallet": "attachWalletThroughMerchant"
   });
 
   router.use(function (req, res, next) {
@@ -932,7 +934,7 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
           if(!error && result && result.data){
             var errorData;
             addressWithCountryCode.forEach(function(address){
-              if(!result.data[address] && address != '6232988412937045830' && sender.address != '6232988412937045830'){
+              if(!result.data[address] /*&& address != '6232988412937045830' && sender.address != '6232988412937045830'*/){
                 errorData = address + ' wallet is not verified.';
               }
             })
@@ -969,17 +971,66 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 			}
 		});
 		//cb();
-	} else if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
+	} else if(trs.type === TransactionTypes.DISABLE_WALLET_KYC) {
+    var addresses = [];
+    var payload = [];
+    var addressWithCountryCode = [];
+
+    if(trs.recipientId){
+      addresses.push(trs.recipientId);
+    }
+    addresses.push(sender.address);
+
+    modules.accounts.getAccounts({
+      address: {$in: addresses}
+    }, ['address', "countryCode"], function (err, rows) {
+      if (err) {
+        return cb("Database error");
+      }
+      rows.forEach(function(row, index) {
+        addresses.forEach(function(address, index) {
+          if(row.address == address) {
+            payload.push(address.concat(row.countryCode));
+            addressWithCountryCode.push(address.concat(row.countryCode));
+          }
+        });
+      });
+
+      httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+        library.logger.info('response from the KYC server: ', result);
+        //result.data.AG1A3ojeLAMZySaZWTkg49jcoVCV7FCKXFIN = true;
+        //result.data['6232988412937045830IN'] = false;
+        //console.log("result: ", result);
+        
+        if(!error && result){
+          var errorData;
+          addressWithCountryCode.forEach(function(address){
+            if((sender.address == addressHelper.removeCountryCodeFromAddress(address)) && !result.data[address]){
+              errorData = address + ' wallet is not verified.';
+            }
+            if((trs.recipientId == addressHelper.removeCountryCodeFromAddress(address)) && result.data[address]) {
+              errorData = address + ' wallet is verified.'
+            }
+          });
+          cb(errorData);
+        } else {
+          cb('Something went wrong.');
+        }
+      });
+    });
+  } else if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
     cb();
   } else if(!recipientId && sender.status == 1) {
 		cb();
-	} else if((sender.status != 1) && sender.address != "6232988412937045830"){
+	} else if((sender.status != 1) /*&& sender.address != "6232988412937045830"*/){
 		cb(sender.address + ((sender && sender.countryCode)? sender.countryCode: '') + ' wallet is not verified.');
-	} else if(sender.address == '6232988412937045830') {
+  } /*else if(sender.address == '6232988412937045830') {
       cb();
-  } else {
+  }*/ else {
 		modules.accounts.getAccount({address : recipientId}, function (err, row){
-			if(!row || row.status != 1){
+      if(!row && trs.type === TransactionTypes.SEND) {
+        cb();
+      } else if(!row || row.status != 1){
 				cb(recipientId + ((row && row.countryCode)? row.countryCode: '') +' wallet is not verified.');
 			} else {
 				cb();
@@ -1301,16 +1352,20 @@ shared.getTransaction = function (req, cb) {
     }
 
     private.getById(query.id, function (err, transaction) {
-      modules.accounts.getAccount({address: transaction.senderId}, function(err, sender) {
-        transaction.senderId = transaction.senderId + ((sender && sender.countryCode)? sender.countryCode: '');
-        modules.accounts.getAccount({address: transaction.recipientId}, function(err, recipient) {
-          transaction.recipientId = transaction.recipientId + ((recipient && recipient.countryCode)? recipient.countryCode: '');
-          if (!transaction || err) {
-            return cb("Transaction not found");
-          }
-          cb(null, { transaction: transaction });
+      if(transaction) {
+        modules.accounts.getAccount({address: transaction.senderId}, function(err, sender) {
+          transaction.senderId = transaction.senderId + ((sender && sender.countryCode)? sender.countryCode: '');
+          modules.accounts.getAccount({address: transaction.recipientId}, function(err, recipient) {
+            transaction.recipientId = transaction.recipientId + ((recipient && recipient.countryCode)? recipient.countryCode: '');
+            if (!transaction || err) {
+              return cb("Transaction not found");
+            }
+            cb(null, { transaction: transaction });
+          });
         });
-      });
+      } else {
+        return cb("Transaction not found");
+      }
     });
   });
 }
@@ -1874,7 +1929,7 @@ shared.disableAccount = function (req, cb) {
         minLength: 2
       }
     },
-    required: ["secret", "status", "recipientId", "senderCountryCode", "currency"]
+    required: ["secret", "status", "recipientId", "senderCountryCode", "recepientCountryCode", "currency"]
   }, function (err) {
     if (err) {
       return cb(err[0].message + ': ' + err[0].path);
@@ -1893,15 +1948,15 @@ shared.disableAccount = function (req, cb) {
 			return cb('Invalid status');
     }
 
-    if(body.currency == 'BEL') {
+    //if(body.currency == 'BEL') {
       var conCode = addressHelper.getCountryCodeFromAddress(body.recipientId);
       var recipientId = addressHelper.removeCountryCodeFromAddress(body.recipientId);
       if(body.recepientCountryCode != conCode) {
         return cb("Recipient country code mismatched!");
       }
-    } else {
+    /*} else {
       var recipientId = body.recipientId;
-    }
+    }*/
     var query = { address: recipientId };
     
     library.balancesSequence.add(function (cb) {
@@ -2649,7 +2704,7 @@ shared.getWalletInfo = function (req, cb) {
     "FROM mem_accounts_attach_wallets acw " +
     "WHERE " +
     "secondWalletAddress= '"+query.address+"'" + " AND " +
-    "currency='"+query.currency+"'";
+    "currency='"+query.currency.toUpperCase()+"'";
 
     var fields = ['baseAddress', 'address', 'currency','status'];
     var params = {};
@@ -2815,6 +2870,249 @@ private.attachWallets = function(body, cb) {
     }
 
     cb(null, { transactionId: transaction[0].id });
+  });
+}
+shared.attachWalletThroughMerchant = function (req, cb) {
+  var body = req.body;
+  library.scheme.validate(body, {
+    type: "object",
+    properties: {
+      secret: {
+        type: "string",
+        minLength: 1,
+        maxLength: 100
+      },
+      publicKey: {
+        type: "string",
+        format: "publicKey"
+      },
+      secondSecret: {
+        type: "string",
+        minLength: 1,
+        maxLength: 100
+      },
+      multisigAccountPublicKey: {
+        type: "string",
+        format: "publicKey"
+      },
+      message: {
+        type: "string",
+        maxLength: 256
+      },
+      countryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
+      },
+      attachFrom: {
+        type: "string",
+        minLength: 1
+      },
+      attachTo: {
+        type: "string",
+        minLength: 1
+      },
+      currency: {
+        type: "string",
+        minLength: 1
+      }
+    },
+    required: ["secret", "countryCode", "attachFrom", "attachTo", "currency"]
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message + ': ' + err[0].path);
+    }
+    body.currency = body.currency.toUpperCase();
+
+    var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
+    var keypair = ed.MakeKeypair(hash);
+
+    if (body.publicKey) {
+      if (keypair.publicKey.toString('hex') != body.publicKey) {
+        return cb("Invalid passphrase");
+      }
+    }
+
+    if(body.currency === "BEL") {
+      var conCodeFrom = addressHelper.getCountryCodeFromAddress(body.attachFrom);
+      body.attachFrom = addressHelper.removeCountryCodeFromAddress(body.attachFrom);
+      var conCodeTo = addressHelper.getCountryCodeFromAddress(body.attachTo);
+      body.attachTo = addressHelper.removeCountryCodeFromAddress(body.attachTo);
+      if(body.countryCode != conCodeFrom && body.countryCode != conCodeTo) {
+        return cb('country code missmatch');
+      }
+    }
+
+    library.balancesSequence.add(function (cb) {
+      if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
+        modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {
+          if (err) {
+            return cb(err.toString());
+          }
+
+          if (!account) {
+            return cb("Multisignature account not found");
+          }
+
+          if (!account.multisignatures || !account.multisignatures) {
+            return cb("Account does not have multisignatures enabled");
+          }
+
+          if (account.multisignatures.indexOf(keypair.publicKey.toString('hex')) < 0) {
+            return cb("Account does not belong to multisignature group");
+          }
+
+          modules.accounts.getAccount({ publicKey: keypair.publicKey }, function (err, requester) {
+            if (err) {
+              return cb(err.toString());
+            }
+
+            if (!requester || !requester.publicKey) {
+              return cb("Invalid requester");
+            }
+
+            if (requester.secondSignature && !body.secondSecret) {
+              return cb("Invalid second passphrase");
+            }
+
+            if (requester.publicKey == account.publicKey) {
+              return cb("Invalid requester");
+            }
+
+            var secondKeypair = null;
+
+            if (requester.secondSignature) {
+              var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
+              secondKeypair = ed.MakeKeypair(secondHash);
+            }
+
+            try {
+              var transaction = library.base.transaction.create({
+                type: TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS,
+                sender: account,
+                keypair: keypair,
+                requester: keypair,
+                secondKeypair: secondKeypair,
+                message: body.message,
+                countryCode: body.countryCode,
+                attachFrom: body.attachFrom,
+                attachTo: body.attachTo,
+                currency: body.currency
+              });
+            } catch (e) {
+              return cb(e.toString());
+            }
+            modules.transactions.receiveTransactions([transaction], cb);
+          });
+        });
+      } else {
+        modules.accounts.getAccount({ publicKey: keypair.publicKey.toString('hex') }, function (err, account) {
+          library.logger.debug('=========================== after getAccount ==========================');
+            if (err) {
+              return cb(err.toString());
+            }
+            if (!account) {
+              return cb("Account not found");
+            }
+            
+            if(account.countryCode != body.countryCode) {
+              return cb("Account country code mismatched!");
+            }
+            
+            if (account.secondSignature && !body.secondSecret) {
+              return cb("Invalid second passphrase");
+            }
+
+            var secondKeypair = null;
+
+            if (account.secondSignature) {
+              var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
+              secondKeypair = ed.MakeKeypair(secondHash);
+            }
+
+            try {
+              var transaction = library.base.transaction.create({
+                type: TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS,
+                sender: account,
+                keypair: keypair,
+                secondKeypair: secondKeypair,
+                message: body.message,
+                countryCode: body.countryCode,
+                attachFrom: body.attachFrom,
+                attachTo: body.attachTo,
+                currency: body.currency
+              });
+            } catch (e) {
+              return cb(e.toString());
+            }
+            modules.transactions.receiveTransactions([transaction], cb);
+        });
+      }
+    }, function (err, transaction) {
+      if (err) {
+        return cb(err.toString());
+      }
+
+      cb(null, { transactionId: transaction[0].id });
+    });
+  });
+}
+
+// get all attached wallets
+shared.getAttachedWallets = function (req, cb) {
+  var query = req.body;
+
+  library.scheme.validate(query, {
+    type: 'object',
+    properties: {
+      address: {
+        type: 'string',
+        minLength: 1
+      }
+    },
+    required: ['address']
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    query.address = addressHelper.removeCountryCodeFromAddress(query.address);
+    
+    var queryString = "SELECT secondWalletAddress, currency, status " + 
+    "FROM mem_accounts_attach_wallets " +
+    "WHERE " +
+    "accountId= '"+query.address+"'";
+
+    var fields = ['address', 'currency','status'];
+    var params = {};
+  
+    library.dbLite.query(queryString, params, fields, function(err, rows) {
+      if(err) {
+        return cb('Error occured while getting address info');
+      }
+      
+      if(!rows.length) {
+        return cb('Invalid address or currency');
+      }
+
+      var info = [];
+
+      async.eachSeries(rows, function (row, cb) {
+        if(row.currency == 'BEL') {
+          modules.accounts.getAccount({ 
+            address: row.address 
+          }, function (err, res) {
+            info.push({address: row.address.concat(res.countryCode), currency: row.currency, status: row.status});
+            cb();
+          });
+        } else {
+          info.push({address: row.address, currency: row.currency, status: row.status});
+          cb();
+        }  
+      }, function(err) {
+        cb(null, { info: info });
+      });
+    });
   });
 }
 // Export

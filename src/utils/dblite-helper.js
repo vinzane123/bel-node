@@ -26,7 +26,7 @@ module.exports.connect = function (connectString, cb) {
     "CREATE TABLE IF NOT EXISTS ac_status(status VARCHAR(20) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS ac_countrycode(countryCode VARCHAR(2) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS white_label_wallets(senderId VARCHAR(50) NOT NULL, secondWalletAddress VARCHAR(50) NOT NULL, currency VARCHAR(22) NOT NULL, status VARCHAR(20) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
-    //"CREATE TABLE IF NOT EXISTS attach_wallet(senderId VARCHAR(50) NOT NULL, secondWalletAddress VARCHAR(50) NOT NULL, currency VARCHAR(22) NOT NULL, status VARCHAR(20) NOT NULL, FOREIGN KEY(senderId) REFERENCES mem_accounts(senderId) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS white_label_merchant_wallets(senderId VARCHAR(50) NOT NULL, attachFrom VARCHAR(50) NOT NULL, attachTo VARCHAR(50) NOT NULL, currency VARCHAR(22) NOT NULL, status VARCHAR(20) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     
     // UIA transactions
     "CREATE TABLE IF NOT EXISTS issuers(name VARCHAR(16) NOT NULL PRIMARY KEY, desc VARCHAR(4096) NOT NULL, issuerId VARCHAR(50), transactionId VARCHAR(64) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
