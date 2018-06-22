@@ -1,6 +1,45 @@
 var constants = require('./constants.js');
 
 function BlockStatus() {
+  var milestones = [
+	500000000,
+	250000000,
+	125000000,
+	62500000,
+	31250000,
+	15625000,
+	7812500,
+	3906250,
+	1953125,
+	976562.5,
+	488281.3,
+	244140.6,
+	122070.3,
+	61035.2,
+	30517.6,
+	15258.8,
+	7629.4,
+	3814.7,
+	1907.3,
+	953.7,
+	476.8,
+	238.4,
+	119.2,
+	59.6,
+	29.8,
+	14.9,
+	7.5,
+	3.7,
+	1.9,
+	0.9
+  ];
+
+  var distance = 2100000, // Distance between each milestone
+      rewardOffset = 1; // Start rewards at block (n)
+
+  if (global.Config.netVersion === 'mainnet') {
+    rewardOffset = 2100000;
+  }
   var milestones = constants.milestonesBelPerBlock;
 
   var distance = constants.blockHeightInterval; // Distance between each milestone
