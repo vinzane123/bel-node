@@ -934,7 +934,7 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
           if(!error && result && result.data){
             var errorData;
             addressWithCountryCode.forEach(function(address){
-              if(!result.data[address] /*&& address != '6232988412937045830' && sender.address != '6232988412937045830'*/){
+              if(!result.data[address]){
                 errorData = address + ' wallet is not verified.';
               }
             })
@@ -998,10 +998,6 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 
       httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
         library.logger.info('response from the KYC server: ', result);
-        //result.data.AG1A3ojeLAMZySaZWTkg49jcoVCV7FCKXFIN = true;
-        //result.data['6232988412937045830IN'] = false;
-        //console.log("result: ", result);
-        
         if(!error && result){
           var errorData;
           addressWithCountryCode.forEach(function(address){
@@ -1022,11 +1018,9 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
     cb();
   } else if(!recipientId && sender.status == 1) {
 		cb();
-	} else if((sender.status != 1) /*&& sender.address != "6232988412937045830"*/){
+	} else if((sender.status != 1)){
 		cb(sender.address + ((sender && sender.countryCode)? sender.countryCode: '') + ' wallet is not verified.');
-  } /*else if(sender.address == '6232988412937045830') {
-      cb();
-  }*/ else {
+  } else {
 		modules.accounts.getAccount({address : recipientId}, function (err, row){
       if(!row && trs.type === TransactionTypes.SEND) {
         cb();
@@ -1540,7 +1534,7 @@ shared.addTransactions = function (req, cb) {
           return cb("Recipient country code mismatched!");
         }
         //var recipientId = recipient ? recipient.address : address;
-        if(recipient) {
+        if(recipient && recipient.countryCode) {
           if(body.recepientCountryCode != recipient.countryCode) {
             return cb("Recipient country code mismatched!");
           }
@@ -2496,7 +2490,7 @@ shared.initialTransactions = function (req, cb) {
           return cb("Recipient country code mismatched!");
         }
         //var recipientId = recipient ? recipient.address : address;
-        if(recipient) {
+        if(recipient && recipient.countryCode) {
           if(body.recepientCountryCode != recipient.countryCode) {
             return cb("Recipient country code mismatched!");
           }
@@ -2924,6 +2918,10 @@ shared.attachWalletThroughMerchant = function (req, cb) {
     }
     body.currency = body.currency.toUpperCase();
 
+    /*if(body.currency != 'BEL') {
+      return cb("You can attach only BEL wallet");
+    }*/
+
     var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
     var keypair = ed.MakeKeypair(hash);
 
@@ -2933,12 +2931,17 @@ shared.attachWalletThroughMerchant = function (req, cb) {
       }
     }
 
+    var conCodeFrom = addressHelper.getCountryCodeFromAddress(body.attachFrom);
+    body.attachFrom = addressHelper.removeCountryCodeFromAddress(body.attachFrom);
+
+    if(body.countryCode != conCodeFrom) {
+      return cb('country code mismatch');
+    }
+
     if(body.currency === "BEL") {
-      var conCodeFrom = addressHelper.getCountryCodeFromAddress(body.attachFrom);
-      body.attachFrom = addressHelper.removeCountryCodeFromAddress(body.attachFrom);
       var conCodeTo = addressHelper.getCountryCodeFromAddress(body.attachTo);
       body.attachTo = addressHelper.removeCountryCodeFromAddress(body.attachTo);
-      if(body.countryCode != conCodeFrom && body.countryCode != conCodeTo) {
+      if(body.countryCode != conCodeTo) {
         return cb('country code missmatch');
       }
     }

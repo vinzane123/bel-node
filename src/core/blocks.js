@@ -133,7 +133,8 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "acls.currency, acls.flag, acls.operator, acls.list, " + 
   "acs.status, " +
   "cc.countryCode, " +
-  "acw.status, acw.secondWalletAddress, acw.currency " +
+  "acw.status, acw.secondWalletAddress, acw.currency, " +
+  "mw.attachFrom, mw.attachTo, mw.currency, mw.status " +
   "FROM blocks b " +
   "left outer join trs as t on t.blockId=b.id " +
   "left outer join delegates as d on d.transactionId=t.id " +
