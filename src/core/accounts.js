@@ -1,6 +1,7 @@
 var crypto = require('crypto');
 var util = require('util');
 var extend = require('extend');
+var async = require('async');
 var ed = require('../utils/ed.js');
 var bignum = require('bignumber');
 var Mnemonic = require('bitcore-mnemonic');
@@ -311,7 +312,37 @@ function Acstatus () {
       library.dbLite.query("INSERT INTO ac_countrycode(countryCode, transactionId) VALUES($countryCode, $transactionId)", {
         countryCode: trs.asset.ac_status.countryCode,
         transactionId: trs.id
-      }, cb);
+      }, function(err) {
+        library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE accountId=$accountId", {
+          status: trs.asset.ac_status.status,
+          accountId: trs.senderId
+        }, function(err) {
+          var queryString = "SELECT secondWalletAddress, status, currency " + 
+          "FROM mem_accounts_attach_wallets " +
+          "WHERE " +
+          "accountId= '"+trs.senderId+"'";
+
+          var fields = ['address','status', 'currency'];
+          var params = {};
+
+          library.dbLite.query(queryString, params, fields, function(err, rows) {
+            async.eachSeries(rows, function (row, cb) {
+              if(row.currency == 'BEL') {
+                modules.accounts.setAccountAndGet({ 
+                  address: row.address,
+                  countryCode: trs.countryCode,
+                  status: row.status,
+                  u_status: row.status 
+                }, function (err, res) {
+                  cb();
+                });
+              } else {
+                cb();
+              }  
+            }, cb);
+          });
+        });
+      });
     });
 	};
 
@@ -476,7 +507,32 @@ function DisableAcstatus () {
         status: trs.asset.ac_status.status,
         accountId: trs.recipientId,
         secondWalletAddress: trs.recipientId
-      }, cb);
+      }, function(err) {
+        var queryString = "SELECT secondWalletAddress, status, currency " + 
+        "FROM mem_accounts_attach_wallets " +
+        "WHERE " +
+        "accountId= '"+trs.recipientId+"'";
+
+        var fields = ['address','status', 'currency'];
+        var params = {};
+
+        library.dbLite.query(queryString, params, fields, function(err, rows) {
+          async.eachSeries(rows, function (row, cb) {
+            if(row.currency == 'BEL') {
+              modules.accounts.setAccountAndGet({ 
+                address: row.address,
+                countryCode: trs.countryCode,
+                status: row.status,
+                u_status: row.status 
+              }, function (err, res) {
+                cb();
+              });
+            } else {
+              cb();
+            }  
+          }, cb);
+        });
+      });
     });
 	};
 
@@ -645,7 +701,216 @@ function AttachWallets () {
         library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
           status: trs.asset.ac_wallets.status,
           secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress
-        }, cb);
+        }, function(err) {
+          if(trs.asset.ac_wallets.currency == 'BEL') {
+            modules.accounts.setAccountAndGet({ 
+              address: trs.asset.ac_wallets.secondWalletAddress, 
+              countryCode: trs.countryCode,
+              status: trs.asset.ac_wallets.status,
+              u_status: trs.asset.ac_wallets.status 
+            }, function (err, rec) {
+              if(err) {
+                return setImmediate(cb, 'Database error');
+              }
+              cb();
+            });
+          } else {
+            cb();
+          } 
+        });
+      });
+    });
+	};
+
+	this.ready = function (trs, sender) {
+    if (util.isArray(sender.multisignatures) && sender.multisignatures.length) {
+      if (!trs.signatures) {
+        return false;
+      }
+      return trs.signatures.length >= sender.multimin - 1;
+    } else {
+      return true;
+    }
+  }
+}
+//Attach wallet through merchant
+function AttachMerchantWallets () {
+	this.create = function (data, trs) {
+		trs.recipientId = null;
+    trs.amount = 0;
+    trs.countryCode = data.countryCode;
+		trs.asset.ac_wallets = {
+      publicKey: data.sender.publicKey,
+      status: data.sender.status,
+      attachFrom: data.attachFrom,
+      attachTo: data.attachTo,
+      currency: data.currency
+		};
+		return trs;
+	};
+
+	this.calculateFee = function (trs, sender) {
+    if(trs.asset.ac_wallets.currency == 'BEL') {
+      return constants.fees.attachMerchantWallets.BEL * constants.fixedPoint;
+    } else {
+      return constants.fees.attachMerchantWallets.NON_BEL * constants.fixedPoint;
+    }
+	};
+
+	this.verify = function (trs, sender, cb) {
+
+		if (trs.recipientId) {
+			return setImmediate(cb, 'Invalid recipient');
+		}
+	
+		if (!trs.asset || !trs.asset.ac_wallets) {
+			return setImmediate(cb, 'Invalid transaction asset');
+    }
+
+    var queryString = "SELECT secondWalletAddress, status, currency " + 
+    "FROM mem_accounts_attach_wallets acw " +
+    "WHERE " +
+    "secondWalletAddress= '"+trs.asset.ac_wallets.attachTo+"'";
+
+    var fields = ['address','status', 'currency'];
+    var params = {};
+
+    library.dbLite.query(queryString, params, fields, function(err, row) {
+      if(row && row[0] && row[0].status == 1) {
+        if(row[0].currency == 'BEL') {
+          return setImmediate(cb, trs.asset.ac_wallets.attachTo + trs.countryCode + ' wallet already attached');
+        } else {
+          return setImmediate(cb, trs.asset.ac_wallets.attachTo + ' wallet already attached');
+        }
+      } else {
+        cb(null, trs);
+      }
+    });
+	};
+
+	this.process = function (trs, sender, cb) {
+    var key = sender.address + ':' + trs.type;
+    if (library.oneoff.has(key)) {
+      return setImmediate(cb, 'Double submit');
+    }
+    library.oneoff.set(key, true);
+    
+		return setImmediate(cb, null, trs);
+	};
+
+	this.getBytes = function (trs) {
+		if (!trs.asset.ac_wallets.status) {
+			return null;
+		}
+	
+		try {
+      var buf = new Buffer(trs.asset.ac_wallets.status);
+      buf.writeUInt8(0x3, 0);
+		} catch (e) {
+			throw e;
+		}
+		return buf;
+	};
+
+	this.apply = function (trs, block, sender, cb) {
+    var key = sender.address + ':' + trs.type;
+    library.oneoff.delete(key);
+
+    setImmediate(cb);
+	};
+
+	this.undo = function (trs, block, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.applyUnconfirmed = function (trs, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.undoUnconfirmed = function (trs, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.objectNormalize = function (trs) {
+    var schema = {
+      id: 'AttachWallets',
+      type: 'object',
+      properties: {
+        publicKey: {
+          type: 'string',
+          format: 'publicKey'
+        }
+      },
+      required: ['publicKey']
+    };
+		var report = library.scheme.validate(trs.asset.ac_wallets, schema);
+		if (!report) {
+      throw new Error("Failed to validate AttachWallets schema: " + library.scheme.getLastError());
+    }
+		return trs;
+	};
+
+	this.dbRead = function (raw) {
+		if (!raw.acw_status) {
+			return null;
+		} else {
+			var ac_wallets = {
+        publicKey: raw.t_senderPublicKey,
+				status: raw.mw_status,
+        attachFrom: raw.mw_attachFrom,
+        attachTo: raw.mw_attachTo,
+        currency: raw.mw_currency
+			};
+			return {ac_wallets: ac_wallets};
+		}
+	};
+
+	this.dbSave = function (trs, cb) {
+    console.log("calling dbSave: ", trs);
+    library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currency, status, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currency, $status, $transactionId)", {
+      senderId: trs.senderId,
+      attachFrom: trs.asset.ac_wallets.attachFrom,
+      attachTo: trs.asset.ac_wallets.attachTo,
+      currency: trs.asset.ac_wallets.currency,
+      status: trs.asset.ac_wallets.status,
+			transactionId: trs.id
+    }, function(err) {
+      console.log("white_label_merchant_wallets err: ", err);
+      if(err) {
+        return setImmediate(cb, 'Database error');
+      }
+      library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, merchantWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $merchantWalletAddress)", {
+        accountId: trs.asset.ac_wallets.attachFrom,
+        secondWalletAddress: trs.asset.ac_wallets.attachTo,
+        currency: trs.asset.ac_wallets.currency,
+        status: trs.asset.ac_wallets.status,
+        merchantWalletAddress: trs.senderId
+      }, function(err, rows) {
+        console.log("mem_accounts_attach_wallets err: ", err);
+        if(err) {
+          return setImmediate(cb, 'Database error');
+        }
+        library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+          status: trs.asset.ac_wallets.status,
+          secondWalletAddress: trs.asset.ac_wallets.attachTo
+        }, function(err) {
+          console.log("UPDATE mem_accounts_attach_wallets err: ", err);
+          if(trs.asset.ac_wallets.currency == 'BEL') {
+            modules.accounts.setAccountAndGet({ 
+              address: trs.asset.ac_wallets.attachTo, 
+              countryCode: trs.countryCode,
+              status: trs.asset.ac_wallets.status,
+              u_status: trs.asset.ac_wallets.status 
+            }, function (err, rec) {
+              if(err) {
+                return setImmediate(cb, 'Database error');
+              }
+              cb();
+            });
+          } else {
+            cb();
+          } 
+        });
       });
     });
 	};
@@ -673,6 +938,7 @@ function Accounts(cb, scope) {
   library.base.transaction.attachAssetType(TransactionTypes.ENABLE_WALLET_KYC, new Acstatus());
   library.base.transaction.attachAssetType(TransactionTypes.DISABLE_WALLET_KYC, new DisableAcstatus());
   library.base.transaction.attachAssetType(TransactionTypes.WHITELIST_WALLET_TRS, new AttachWallets());
+  library.base.transaction.attachAssetType(TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS, new AttachMerchantWallets());
 
   setImmediate(cb, null, self);
 }

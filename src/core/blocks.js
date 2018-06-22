@@ -99,7 +99,11 @@ private.blocksDataFields = {
   'cc_countryCode': String,
   'acw_status': String,
   'acw_secondWalletAddress': String,
-  'acw_currency': String
+  'acw_currency': String,
+  'mw_attachFrom': String,
+  'mw_attachTo': String,
+  'mw_currency': String,
+  'mw_status': String
 };
 // @formatter:on
 private.loaded = false;
@@ -148,7 +152,8 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "left outer join acls on acls.transactionId=t.id " +
   "left outer join ac_status as acs on acs.transactionId=t.id " +
   "left outer join ac_countrycode as cc on cc.transactionId=t.id " +
-  "left outer join white_label_wallets as acw on acw.transactionId=t.id ";
+  "left outer join white_label_wallets as acw on acw.transactionId=t.id " +
+  "left outer join white_label_merchant_wallets as mw on mw.transactionId=t.id ";
 
 // Constructor
 function Blocks(cb, scope) {
