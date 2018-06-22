@@ -789,13 +789,22 @@ function AttachMerchantWallets () {
 	};
 
 	this.process = function (trs, sender, cb) {
-    var key = sender.address + ':' + trs.type;
-    if (library.oneoff.has(key)) {
-      return setImmediate(cb, 'Double submit');
-    }
-    library.oneoff.set(key, true);
-    
-		return setImmediate(cb, null, trs);
+    var address = trs.asset.ac_wallets.attachFrom;
+    modules.accounts.getAccount({address: address}, function(err, account) {
+      if(!account) {
+        return cb(address.concat(trs.countryCode) + ' wallet not exists');
+      }
+      if(account.status != 1) {
+        return cb(address.concat((account.countryCode)? account.countryCode: trs.countryCode) + ' wallet not verified');
+      }
+      var key = sender.address + ':' + trs.type;
+      if (library.oneoff.has(key)) {
+        return setImmediate(cb, 'Double submit');
+      }
+      library.oneoff.set(key, true);
+      
+      return setImmediate(cb, null, trs);
+    });
 	};
 
 	this.getBytes = function (trs) {
@@ -833,7 +842,7 @@ function AttachMerchantWallets () {
 
 	this.objectNormalize = function (trs) {
     var schema = {
-      id: 'AttachWallets',
+      id: 'AttachMerchantWallets',
       type: 'object',
       properties: {
         publicKey: {
@@ -845,13 +854,13 @@ function AttachMerchantWallets () {
     };
 		var report = library.scheme.validate(trs.asset.ac_wallets, schema);
 		if (!report) {
-      throw new Error("Failed to validate AttachWallets schema: " + library.scheme.getLastError());
+      throw new Error("Failed to validate AttachMerchantWallets schema: " + library.scheme.getLastError());
     }
 		return trs;
 	};
 
 	this.dbRead = function (raw) {
-		if (!raw.acw_status) {
+		if (!raw.mw_status) {
 			return null;
 		} else {
 			var ac_wallets = {
@@ -866,7 +875,6 @@ function AttachMerchantWallets () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    console.log("calling dbSave: ", trs);
     library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currency, status, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currency, $status, $transactionId)", {
       senderId: trs.senderId,
       attachFrom: trs.asset.ac_wallets.attachFrom,
@@ -875,7 +883,6 @@ function AttachMerchantWallets () {
       status: trs.asset.ac_wallets.status,
 			transactionId: trs.id
     }, function(err) {
-      console.log("white_label_merchant_wallets err: ", err);
       if(err) {
         return setImmediate(cb, 'Database error');
       }
@@ -886,7 +893,6 @@ function AttachMerchantWallets () {
         status: trs.asset.ac_wallets.status,
         merchantWalletAddress: trs.senderId
       }, function(err, rows) {
-        console.log("mem_accounts_attach_wallets err: ", err);
         if(err) {
           return setImmediate(cb, 'Database error');
         }
@@ -894,7 +900,6 @@ function AttachMerchantWallets () {
           status: trs.asset.ac_wallets.status,
           secondWalletAddress: trs.asset.ac_wallets.attachTo
         }, function(err) {
-          console.log("UPDATE mem_accounts_attach_wallets err: ", err);
           if(trs.asset.ac_wallets.currency == 'BEL') {
             modules.accounts.setAccountAndGet({ 
               address: trs.asset.ac_wallets.attachTo, 
