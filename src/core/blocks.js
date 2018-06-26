@@ -13,6 +13,7 @@ var Router = require('../utils/router.js');
 var slots = require('../utils/slots.js');
 var TransactionTypes = require('../utils/transaction-types.js');
 var sandboxHelper = require('../utils/sandbox.js');
+var addressHelper = require('../utils/address.js')
 
 require('array.prototype.findindex'); // Old node fix
 
@@ -703,6 +704,13 @@ Blocks.prototype.loadBlocksOffset = function (limit, offset, verify, cb) {
           if (verify) {
             if (!private.lastBlock || !private.lastBlock.id) {
               // apply genesis block
+              library.miner.minerAddresses.forEach(function(data) {
+                block.transactions.forEach(function(trs) {
+                  if(trs.senderId == addressHelper.removeCountryCodeFromAddress(data.address)) {
+                    trs.countryCode = data.countryCode;
+                  }
+                });
+              });
               self.applyBlock(block, null, false, false, next);
             } else {
               self.verifyBlock(block, null, function (err) {
@@ -929,10 +937,11 @@ Blocks.prototype.applyBlock = function (block, votes, broadcast, saveBlock, call
       }
       return 0;
     });
+    
     async.eachSeries(sortedTrs, function (transaction, nextTr) {
       async.waterfall([
         function (next) {
-          modules.accounts.setAccountAndGet({ publicKey: transaction.senderPublicKey, isGenesis: block.height == 1 }, next);
+          modules.accounts.setAccountAndGet({ publicKey: transaction.senderPublicKey, isGenesis: block.height == 1, countryCode: transaction.countryCode }, next);
         },
         function (sender, next) {
           // if (modules.transactions.hasUnconfirmedTransaction(transaction)) {
