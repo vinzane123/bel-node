@@ -595,6 +595,51 @@ Account.prototype.createTables = function (cb) {
   });
   sqles.push(sql.query);
   
+  var sql = jsonSql.build({
+    type: 'create',
+    table: this.table + "_merchant_trs",
+    tableFields: [
+      {
+        name: "merchantId",
+        type: "String",
+        length: 50,
+        not_null: true
+      }, {
+        name: "payFor",
+        type: "String",
+        length: 64,
+        not_null: true
+      },
+      {
+        name: "recipientId",
+        type: "String",
+        length: 64,
+        not_null: true
+      },
+      {
+        name: "amount",
+        type: "BigInt",
+        filter: {
+          required: true,
+          type: "integer",
+          minimum: 0,
+          maximum: constants.totalAMount
+        },
+        conv: Number,
+        default: 0
+      }
+    ],
+    foreignKeys: [
+      {
+        field: "merchantId",
+        table: this.table,
+        table_field: "address",
+        on_delete: "cascade"
+      }
+    ]
+  });
+  sqles.push(sql.query);
+
   sqles.push("delete from mem_accounts2u_delegates;");
   // sqles.push("delete from mem_accounts2u_multisignatures;");
   sqles.push("INSERT INTO mem_accounts2u_delegates SELECT * FROM mem_accounts2delegates;");
