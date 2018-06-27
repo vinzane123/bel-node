@@ -690,7 +690,8 @@ private.attachApi = function () {
     "put /attach/belWallet": "attachBellWallet",
     'get /attached/wallets': "getAttachedWallets",
     "put /merchant/attach/wallet": "attachWalletThroughMerchant",
-    "put /merchant": "addMerchantTransactions"
+    "put /merchant": "addMerchantTransactions",
+    "get /merchant/get": "getMerchantTransactions"
   });
 
   router.use(function (req, res, next) {
@@ -1515,6 +1516,40 @@ shared.getTransaction = function (req, cb) {
       } else {
         return cb("Transaction not found");
       }
+    });
+  });
+}
+
+shared.getMerchantTransactions = function (req, cb) {
+  var query = req.body;
+  query.address = addressHelper.removeCountryCodeFromAddress(query.address);
+  library.scheme.validate(query, {
+    type: 'object',
+    properties: {
+      address: {
+        type: 'string',
+        minLength: 1
+      }
+    },
+    required: ['address']
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    modules.accounts.getAccount({address: query.address}, function(err, account) {
+      var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'";
+      params = {};
+      fields = ["merchantId", "payFor", "recipientId", "amount"];
+      library.dbLite.query(queryString, params, fields, function(err, rows) {
+        console.log("rows: ", rows);
+        rows.forEach(function(row) {
+          row.merchantId = row.merchantId.concat(account.countryCode);
+          row.payFor = row.payFor.concat(account.countryCode);
+          row.recipientId = row.recipientId.concat(account.countryCode);
+        });
+        cb(null, { data: rows });
+      });
     });
   });
 }
@@ -3282,8 +3317,15 @@ shared.addMerchantTransactions = function (req, cb) {
         return cb("Invalid passphrase");
       }
     }
-    var conCode = addressHelper.getCountryCodeFromAddress(body.recipientId);
+    var payForConCode = addressHelper.getCountryCodeFromAddress(body.payFor);
+    body.payFor = addressHelper.removeCountryCodeFromAddress(body.payFor);
+
+    var recConCode = addressHelper.getCountryCodeFromAddress(body.recipientId);
     var recipientId = addressHelper.removeCountryCodeFromAddress(body.recipientId);
+
+    if(body.recepientCountryCode != payForConCode || body.recepientCountryCode != recConCode) {
+      return cb("country code mismatched!");
+    }
     var query = { address: recipientId };
 
     library.balancesSequence.add(function (cb) {
@@ -3292,7 +3334,7 @@ shared.addMerchantTransactions = function (req, cb) {
         if (err) {
           return cb(err.toString());
         }
-        if(body.recepientCountryCode != conCode) {
+        if(body.recepientCountryCode != recConCode) {
           return cb("Recipient country code mismatched!");
         }
         if(!recipient) {
