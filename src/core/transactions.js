@@ -307,7 +307,10 @@ function MerchantTransfer () {
 		trs.recipientId = data.recipientId;
     trs.amount = data.amount;
     trs.countryCode = data.countryCode;
-    trs.asset.countryCode =  data.recepientCountryCode;
+    trs.asset.merchant = {
+      countryCode:  data.recepientCountryCode,
+      payFor: data.payFor
+    };
 		return trs;
 	};
 
@@ -351,7 +354,7 @@ function MerchantTransfer () {
 
 	this.getBytes = function (trs) {
 		try {
-      var buf = trs.asset && trs.asset.countryCode && trs.asset.countryCode ? new Buffer(trs.asset.countryCode, 'utf8') : null;
+      var buf = trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? new Buffer(trs.asset.merchant.countryCode, 'utf8') : null;
     } catch (e) {
       throw Error(e.toString());
     }
@@ -360,7 +363,7 @@ function MerchantTransfer () {
 	};
 
 	this.apply = function (trs, block, sender, cb) {
-    var recepientCountryCode = (trs.asset && trs.asset.countryCode)? trs.asset.countryCode: '';
+    var recepientCountryCode = (trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode)? trs.asset.merchant.countryCode: '';
     modules.accounts.setAccountAndGet({ address: trs.recipientId, countryCode: recepientCountryCode }, function (err, recipient) {
       if (err) {
         return cb(err);
@@ -381,7 +384,7 @@ function MerchantTransfer () {
 	};
 
 	this.undo = function (trs, block, sender, cb) {
-    var recepientCountryCode = (trs.asset && trs.asset.countryCode)? trs.asset.countryCode: '';    
+    var recepientCountryCode = (trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode)? trs.asset.merchant.countryCode: '';    
     modules.accounts.setAccountAndGet({ address: trs.recipientId, countryCode: recepientCountryCode }, function (err, recipient) {    
       if (err) {
         return cb(err);
@@ -413,23 +416,27 @@ function MerchantTransfer () {
 	};
 
 	this.dbRead = function (raw) {
-		if (!raw.cc_countryCode) {
+		if (!raw.mt_countryCode) {
 			return null;
 		} else {
-			var countryCode = raw.cc_countryCode;
-			return {countryCode: countryCode};
+			var merchant = {
+        countryCode: raw.mt_countryCode,
+        payFor: raw.mt_payFor
+      };
+			return {merchant: merchant};
 		}
 	};
 
 	this.dbSave = function (trs, cb) {
     console.log("trs dbSave: ", trs);
-    library.dbLite.query("INSERT INTO ac_countrycode(countryCode, transactionId) VALUES($countryCode, $transactionId)", {
-      countryCode: trs.asset && trs.asset.countryCode? trs.asset.countryCode: '',
+    library.dbLite.query("INSERT INTO merchant(countryCode, payFor, transactionId) VALUES($countryCode, $payFor, $transactionId)", {
+      countryCode: trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? trs.asset.merchant.countryCode: '',
+      payFor: trs.asset.merchant.payFor,
       transactionId: trs.id
     }, function(err) {
       library.dbLite.query("INSERT INTO mem_accounts_merchant_trs(merchantId, payFor, recipientId, amount) VALUES($merchantId, $payFor, $recipientId, $amount)", {
         merchantId: trs.senderId,
-        payFor: trs.payFor,
+        payFor: trs.asset.merchant.payFor,
         recipientId: trs.recipientId,
         amount: trs.amount
       }, cb);
