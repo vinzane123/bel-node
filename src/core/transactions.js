@@ -428,7 +428,6 @@ function MerchantTransfer () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    console.log("trs dbSave: ", trs);
     library.dbLite.query("INSERT INTO merchant(countryCode, payFor, transactionId) VALUES($countryCode, $payFor, $transactionId)", {
       countryCode: trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? trs.asset.merchant.countryCode: '',
       payFor: trs.asset.merchant.payFor,
@@ -1542,7 +1541,6 @@ shared.getMerchantTransactions = function (req, cb) {
       params = {};
       fields = ["merchantId", "payFor", "recipientId", "amount"];
       library.dbLite.query(queryString, params, fields, function(err, rows) {
-        console.log("rows: ", rows);
         rows.forEach(function(row) {
           row.merchantId = row.merchantId.concat(account.countryCode);
           row.payFor = row.payFor.concat(account.countryCode);
@@ -3330,7 +3328,6 @@ shared.addMerchantTransactions = function (req, cb) {
 
     library.balancesSequence.add(function (cb) {
       modules.accounts.getAccount(query, function (err, recipient) {
-        console.log("recipient: ", recipient);
         if (err) {
           return cb(err.toString());
         }

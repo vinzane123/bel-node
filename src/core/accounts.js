@@ -935,7 +935,6 @@ function AttachMerchantWallets () {
 // Add merchant contract
 function Merchant() {
   this.create = function (data, trs) {
-    console.log("data: ", data);
     trs.recipientId = null;
     trs.amount = 0;
     trs.countryCode = data.countryCode;
@@ -1115,7 +1114,6 @@ function Merchant() {
   }
 
   this.dbSave = function (trs, cb) {
-    console.log("merchant dbSave: ", trs);
     library.dbLite.query("INSERT INTO merchants(merchantName, transactionId) VALUES($merchantName, $transactionId)", {
       merchantName: trs.asset.merchant.merchantName,
       transactionId: trs.id
@@ -1172,7 +1170,8 @@ private.attachApi = function () {
     "put /delegates": "addDelegates",
     "get /": "getAccount",
     "get /new": "newAccount",
-    "put /merchant": "addMerchant"
+    "put /merchant": "addMerchant",
+    "get /merchants": "getMerchants"
   });
 
   if (process.env.DEBUG && process.env.DEBUG.toUpperCase() == "TRUE") {
@@ -1885,7 +1884,6 @@ shared.addDelegates = function (req, cb) {
 
 //Add merchant
 shared.addMerchant = function (req, cb) {
-  console.log("calling add merchant");
   var body = req.body;
   library.scheme.validate(body, {
     type: "object",
@@ -2030,6 +2028,49 @@ shared.addMerchant = function (req, cb) {
       }
       cb(null, {transactionId: transaction[0].id });
     });
+  });
+}
+
+shared.getMerchants = function (req, cb) {
+  var query = req.body;
+  library.scheme.validate(query, {
+    type: 'object',
+    properties: {
+      address: {
+        type: "string",
+        minLength: 1
+      },
+      limit: {
+        type: "integer",
+        minimum: 0,
+        maximum: 101
+      },
+      offset: {
+        type: "integer",
+        minimum: 0
+      },
+      orderBy: {
+        type: "string"
+      }
+    }
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    self.getAccounts({
+      isMerchant: 1,
+      sort: { "publicKey": 1 }
+    }, ["merchantName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, merchants) {
+      if (err) {
+        return cb(err.toString());
+      }
+      merchants.forEach(function(merchant) {
+        merchant.address = merchant.address.concat(merchant.countryCode);
+      });
+      cb(null, {data: merchants });
+    });
+
   });
 }
 
