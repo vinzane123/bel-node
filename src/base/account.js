@@ -348,6 +348,50 @@ function Account(scope, cb) {
     {
       name: "countryCode",
       type: "Text"
+    },
+    {
+      name: "merchantName",
+      type: "String",
+      length: 20,
+      filter: {
+        type: "string",
+        case: "lower",
+        maxLength: 20,
+        minLength: 1
+      },
+      conv: String,
+      constante: true
+    },
+    {
+      name: "u_merchantName",
+      type: "String",
+      length: 20,
+      filter: {
+        type: "string",
+        case: "lower",
+        maxLength: 20,
+        minLength: 1
+      },
+      conv: String,
+      constante: true
+    },
+    {
+      name: "isMerchant",
+      type: "BigInt",
+      filter: {
+        type: "boolean"
+      },
+      conv: Boolean,
+      default: 0
+    },
+    {
+      name: "u_isMerchant",
+      type: "BigInt",
+      filter: {
+        type: "boolean"
+      },
+      conv: Boolean,
+      default: 0
     }
   ];
 

@@ -106,7 +106,8 @@ private.blocksDataFields = {
   'mw_currency': String,
   'mw_status': String,
   'mt_countryCode': String,
-  'mt_payFor': String
+  'mt_payFor': String,
+  'mr_merchantName': String
 };
 // @formatter:on
 private.loaded = false;
@@ -138,7 +139,8 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "cc.countryCode, " +
   "acw.status, acw.secondWalletAddress, acw.currency, " +
   "mw.attachFrom, mw.attachTo, mw.currency, mw.status, " +
-  "mt.countryCode, mt.payFor " +
+  "mt.countryCode, mt.payFor, " +
+  "mr.merchantName " +
   "FROM blocks b " +
   "left outer join trs as t on t.blockId=b.id " +
   "left outer join delegates as d on d.transactionId=t.id " +
@@ -159,7 +161,8 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "left outer join ac_countrycode as cc on cc.transactionId=t.id " +
   "left outer join white_label_wallets as acw on acw.transactionId=t.id " +
   "left outer join white_label_merchant_wallets as mw on mw.transactionId=t.id " +
-  "left outer join merchant as mt on mt.transactionId=t.id ";
+  "left outer join merchant as mt on mt.transactionId=t.id " +
+  "left outer join merchants as mr on mr.transactionId=t.id ";
 
 // Constructor
 function Blocks(cb, scope) {
