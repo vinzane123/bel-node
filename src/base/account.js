@@ -392,6 +392,50 @@ function Account(scope, cb) {
       },
       conv: Boolean,
       default: 0
+    },
+    {
+      name: "isVerifier",
+      type: "BigInt",
+      filter: {
+        type: "boolean"
+      },
+      conv: Boolean,
+      default: 0
+    },
+    {
+      name: "u_isVerifier",
+      type: "BigInt",
+      filter: {
+        type: "boolean"
+      },
+      conv: Boolean,
+      default: 0
+    },
+    {
+      name: "verifierName",
+      type: "String",
+      length: 20,
+      filter: {
+        type: "string",
+        case: "lower",
+        maxLength: 20,
+        minLength: 1
+      },
+      conv: String,
+      constante: true
+    },
+    {
+      name: "u_verifierName",
+      type: "String",
+      length: 20,
+      filter: {
+        type: "string",
+        case: "lower",
+        maxLength: 20,
+        minLength: 1
+      },
+      conv: String,
+      constante: true
     }
   ];
 

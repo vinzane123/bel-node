@@ -37,7 +37,8 @@ module.exports = {
       BEL: 0,
       NON_BEL: 0
     },
-    merchant: 50
+    merchant: 50,
+    verifier: 50
   },
   blockHeightInterval: 2100000,
   milestonesBelPerBlock: [
