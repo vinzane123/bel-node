@@ -1152,6 +1152,7 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
       });
 
       httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+        //result.data['3993821763104859620IN'] = false;
         library.logger.info('response from the KYC server: ', result);
         if(!error && result){
           var errorData;
@@ -1959,7 +1960,7 @@ shared.verifyAccount = function (req, cb) {
     if(body.expDate < new Date().getTime()) {
       return cb('Invalid date, expiry date should be greater than today date');
     }
-    console.log("body.expDate: ", body.expDate);
+    
     library.balancesSequence.add(function (cb) {
         if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
           modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {

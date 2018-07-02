@@ -310,42 +310,45 @@ function Acstatus () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO ac_status(status, expDate, transactionId) VALUES($status, $expDate, $transactionId)", {
-      status: trs.asset.ac_status.status,
-      expDate: trs.asset.ac_status.expDate,
-			transactionId: trs.id
-    }, function(err) {
-      library.dbLite.query("INSERT INTO ac_countrycode(countryCode, transactionId) VALUES($countryCode, $transactionId)", {
-        countryCode: trs.asset.ac_status.countryCode,
+    modules.accounts.getAccount({address: trs.senderId}, function(err, sender) {
+      library.dbLite.query("INSERT INTO ac_status(status, expDate, transactionId) VALUES($status, $expDate, $transactionId)", {
+        status: trs.asset.ac_status.status,
+        expDate: trs.asset.ac_status.expDate,
         transactionId: trs.id
       }, function(err) {
-        library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE accountId=$accountId", {
-          status: trs.asset.ac_status.status,
-          accountId: trs.senderId
+        library.dbLite.query("INSERT INTO ac_countrycode(countryCode, transactionId) VALUES($countryCode, $transactionId)", {
+          countryCode: trs.asset.ac_status.countryCode,
+          transactionId: trs.id
         }, function(err) {
-          var queryString = "SELECT secondWalletAddress, status, currency " + 
-          "FROM mem_accounts_attach_wallets " +
-          "WHERE " +
-          "accountId= '"+trs.senderId+"'";
-
-          var fields = ['address','status', 'currency'];
-          var params = {};
-
-          library.dbLite.query(queryString, params, fields, function(err, rows) {
-            async.eachSeries(rows, function (row, cb) {
-              if(row.currency == 'BEL') {
-                modules.accounts.setAccountAndGet({ 
-                  address: row.address,
-                  countryCode: trs.countryCode,
-                  status: row.status,
-                  u_status: row.status 
-                }, function (err, res) {
+          library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE accountId=$accountId", {
+            status: trs.asset.ac_status.status,
+            accountId: trs.senderId
+          }, function(err) {
+            var queryString = "SELECT secondWalletAddress, status, currency " + 
+            "FROM mem_accounts_attach_wallets " +
+            "WHERE " +
+            "accountId= '"+trs.senderId+"'";
+  
+            var fields = ['address','status', 'currency'];
+            var params = {};
+  
+            library.dbLite.query(queryString, params, fields, function(err, rows) {
+              async.eachSeries(rows, function (row, cb) {
+                if(row.currency == 'BEL') {
+                  modules.accounts.setAccountAndGet({ 
+                    address: row.address,
+                    countryCode: trs.countryCode,
+                    status: row.status,
+                    u_status: row.status,
+                    expDate: sender.expDate 
+                  }, function (err, res) {
+                    cb();
+                  });
+                } else {
                   cb();
-                });
-              } else {
-                cb();
-              }  
-            }, cb);
+                }  
+              }, cb);
+            });
           });
         });
       });
@@ -685,44 +688,47 @@ function AttachWallets () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO white_label_wallets(senderId, secondWalletAddress, currency, status, transactionId) VALUES($senderId, $secondWalletAddress, $currency, $status, $transactionId)", {
-      senderId: trs.senderId,
-      secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress,
-      currency: trs.asset.ac_wallets.currency,
-      status: trs.asset.ac_wallets.status,
-			transactionId: trs.id
-    }, function(err) {
-      if(err) {
-        return setImmediate(cb, 'Database error');
-      }
-      library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status) VALUES($accountId, $secondWalletAddress, $currency, $status)", {
-        accountId: trs.senderId,
+    modules.accounts.getAccount({address: trs.senderId}, function(err, sender) {
+      library.dbLite.query("INSERT INTO white_label_wallets(senderId, secondWalletAddress, currency, status, transactionId) VALUES($senderId, $secondWalletAddress, $currency, $status, $transactionId)", {
+        senderId: trs.senderId,
         secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress,
         currency: trs.asset.ac_wallets.currency,
-        status: trs.asset.ac_wallets.status
-      }, function(err, rows) {
+        status: trs.asset.ac_wallets.status,
+        transactionId: trs.id
+      }, function(err) {
         if(err) {
           return setImmediate(cb, 'Database error');
         }
-        library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
-          status: trs.asset.ac_wallets.status,
-          secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress
-        }, function(err) {
-          if(trs.asset.ac_wallets.currency == 'BEL') {
-            modules.accounts.setAccountAndGet({ 
-              address: trs.asset.ac_wallets.secondWalletAddress, 
-              countryCode: trs.countryCode,
-              status: trs.asset.ac_wallets.status,
-              u_status: trs.asset.ac_wallets.status 
-            }, function (err, rec) {
-              if(err) {
-                return setImmediate(cb, 'Database error');
-              }
+        library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status) VALUES($accountId, $secondWalletAddress, $currency, $status)", {
+          accountId: trs.senderId,
+          secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress,
+          currency: trs.asset.ac_wallets.currency,
+          status: trs.asset.ac_wallets.status
+        }, function(err, rows) {
+          if(err) {
+            return setImmediate(cb, 'Database error');
+          }
+          library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+            status: trs.asset.ac_wallets.status,
+            secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress
+          }, function(err) {
+            if(trs.asset.ac_wallets.currency == 'BEL') {
+              modules.accounts.setAccountAndGet({ 
+                address: trs.asset.ac_wallets.secondWalletAddress, 
+                countryCode: trs.countryCode,
+                status: trs.asset.ac_wallets.status,
+                u_status: trs.asset.ac_wallets.status,
+                expDate: sender.expDate 
+              }, function (err, rec) {
+                if(err) {
+                  return setImmediate(cb, 'Database error');
+                }
+                cb();
+              });
+            } else {
               cb();
-            });
-          } else {
-            cb();
-          } 
+            } 
+          });
         });
       });
     });
@@ -881,46 +887,49 @@ function AttachMerchantWallets () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currency, status, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currency, $status, $transactionId)", {
-      senderId: trs.senderId,
-      attachFrom: trs.asset.ac_wallets.attachFrom,
-      attachTo: trs.asset.ac_wallets.attachTo,
-      currency: trs.asset.ac_wallets.currency,
-      status: trs.asset.ac_wallets.status,
-			transactionId: trs.id
-    }, function(err) {
-      if(err) {
-        return setImmediate(cb, 'Database error');
-      }
-      library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, merchantWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $merchantWalletAddress)", {
-        accountId: trs.asset.ac_wallets.attachFrom,
-        secondWalletAddress: trs.asset.ac_wallets.attachTo,
+    modules.accounts.getAccount({address: trs.address}, function(err, sender) {
+      library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currency, status, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currency, $status, $transactionId)", {
+        senderId: trs.senderId,
+        attachFrom: trs.asset.ac_wallets.attachFrom,
+        attachTo: trs.asset.ac_wallets.attachTo,
         currency: trs.asset.ac_wallets.currency,
         status: trs.asset.ac_wallets.status,
-        merchantWalletAddress: trs.senderId
-      }, function(err, rows) {
+        transactionId: trs.id
+      }, function(err) {
         if(err) {
           return setImmediate(cb, 'Database error');
         }
-        library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+        library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, merchantWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $merchantWalletAddress)", {
+          accountId: trs.asset.ac_wallets.attachFrom,
+          secondWalletAddress: trs.asset.ac_wallets.attachTo,
+          currency: trs.asset.ac_wallets.currency,
           status: trs.asset.ac_wallets.status,
-          secondWalletAddress: trs.asset.ac_wallets.attachTo
-        }, function(err) {
-          if(trs.asset.ac_wallets.currency == 'BEL') {
-            modules.accounts.setAccountAndGet({ 
-              address: trs.asset.ac_wallets.attachTo, 
-              countryCode: trs.countryCode,
-              status: trs.asset.ac_wallets.status,
-              u_status: trs.asset.ac_wallets.status 
-            }, function (err, rec) {
-              if(err) {
-                return setImmediate(cb, 'Database error');
-              }
+          merchantWalletAddress: trs.senderId
+        }, function(err, rows) {
+          if(err) {
+            return setImmediate(cb, 'Database error');
+          }
+          library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+            status: trs.asset.ac_wallets.status,
+            secondWalletAddress: trs.asset.ac_wallets.attachTo
+          }, function(err) {
+            if(trs.asset.ac_wallets.currency == 'BEL') {
+              modules.accounts.setAccountAndGet({ 
+                address: trs.asset.ac_wallets.attachTo, 
+                countryCode: trs.countryCode,
+                status: trs.asset.ac_wallets.status,
+                u_status: trs.asset.ac_wallets.status,
+                expDate: sender.expDate 
+              }, function (err, rec) {
+                if(err) {
+                  return setImmediate(cb, 'Database error');
+                }
+                cb();
+              });
+            } else {
               cb();
-            });
-          } else {
-            cb();
-          } 
+            } 
+          });
         });
       });
     });
