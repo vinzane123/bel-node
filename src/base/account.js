@@ -436,6 +436,15 @@ function Account(scope, cb) {
       },
       conv: String,
       constante: true
+    },
+    {
+      name: "expDate",
+      type: "BigInt",
+      filter: {
+        type: "integer"
+      },
+      conv: Number,
+      default: new Date(new Date().setFullYear(new Date().getFullYear() + constants.expDateOfKYC)).getTime()
     }
   ];
 

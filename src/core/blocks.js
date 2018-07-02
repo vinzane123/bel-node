@@ -97,6 +97,7 @@ private.blocksDataFields = {
   'acls_operator': String,
   'acls_list': String,
   'acs_status': String,
+  'acs_expDate': Number,
   'cc_countryCode': String,
   'acw_status': String,
   'acw_secondWalletAddress': String,
@@ -137,6 +138,7 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "transfers.currency, transfers.amount, " +
   "acls.currency, acls.flag, acls.operator, acls.list, " + 
   "acs.status, " +
+  "acs.expDate, " +
   "cc.countryCode, " +
   "acw.status, acw.secondWalletAddress, acw.currency, " +
   "mw.attachFrom, mw.attachTo, mw.currency, mw.status, " +
@@ -717,7 +719,7 @@ Blocks.prototype.loadBlocksOffset = function (limit, offset, verify, cb) {
               library.miner.minerAddresses.forEach(function(data) {
                 block.transactions.forEach(function(trs) {
                   if(trs.senderId == addressHelper.removeCountryCodeFromAddress(data.address)) {
-                    trs.countryCode = data.countryCode;
+                    trs.countryCode = 'IN' //data.countryCode;
                   }
                 });
               });

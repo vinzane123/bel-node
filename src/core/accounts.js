@@ -163,10 +163,10 @@ function Acstatus () {
     trs.countryCode = data.countryCode;
 		trs.asset.ac_status = {
       countryCode: data.countryCode,
-			status: data.status,
+      status: data.status,
+      expDate: data.expDate,
 			publicKey: data.sender.publicKey
 		};
-
 		return trs;
 	};
 
@@ -226,7 +226,8 @@ function Acstatus () {
       address: sender.address,
       countryCode: trs.asset.ac_status.countryCode ? trs.asset.ac_status.countryCode: '',
 			u_status: trs.asset.ac_status.status,
-			status: trs.asset.ac_status.status
+      status: trs.asset.ac_status.status,
+      expDate: trs.asset.ac_status.expDate
 		};
   
     var key = sender.address + ':' + trs.type;
@@ -240,7 +241,8 @@ function Acstatus () {
       address: sender.address,
       countryCode: trs.asset.ac_status.countryCode ? trs.asset.ac_status.countryCode: '',
 			u_status: trs.asset.ac_status.status == 0?1:0,
-			status: !trs.asset.ac_status.status == 0?1:0
+      status: !trs.asset.ac_status.status == 0?1:0,
+      expDate: trs.asset.ac_status.expDate
 		};
 	
 		modules.accounts.setAccountAndGet(data, cb);
@@ -251,7 +253,8 @@ function Acstatus () {
       address: sender.address,
       countryCode: trs.asset.ac_status.countryCode ? trs.asset.ac_status.countryCode: '',
 			u_status: trs.asset.ac_status.status,
-			status: trs.asset.ac_status.status
+      status: trs.asset.ac_status.status,
+      expDate: trs.asset.ac_status.expDate
 		};
   
     //modules.accounts.setAccountAndGet(data, cb);
@@ -263,7 +266,8 @@ function Acstatus () {
       address: sender.address,
       countryCode: trs.asset.ac_status.countryCode ? trs.asset.ac_status.countryCode: '',
 			u_status: trs.asset.ac_status.status == 0 ? 1:0,
-			status: trs.asset.ac_status.status == 0 ? 1:0
+      status: trs.asset.ac_status.status == 0 ? 1:0,
+      expDate: trs.asset.ac_status.expDate
 		};
     
     //modules.accounts.setAccountAndGet(data, cb);
@@ -297,7 +301,8 @@ function Acstatus () {
 				status: raw.acs_status,
 				publicKey: raw.t_senderPublicKey,
         address: raw.t_senderId,
-        countryCode: raw.cc_countryCode
+        countryCode: raw.cc_countryCode,
+        expDate: raw.acs_expDate
 			};
 	
 			return {ac_status: ac_status};
@@ -305,8 +310,9 @@ function Acstatus () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO ac_status(status, transactionId) VALUES($status, $transactionId)", {
+    library.dbLite.query("INSERT INTO ac_status(status, expDate, transactionId) VALUES($status, $expDate, $transactionId)", {
       status: trs.asset.ac_status.status,
+      expDate: trs.asset.ac_status.expDate,
 			transactionId: trs.id
     }, function(err) {
       library.dbLite.query("INSERT INTO ac_countrycode(countryCode, transactionId) VALUES($countryCode, $transactionId)", {

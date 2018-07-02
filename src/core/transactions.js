@@ -1171,15 +1171,15 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
     });
   } else if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
     cb();
-  } else if(!recipientId && sender.status == 1) {
+  } else if(!recipientId && sender.status == 1 && sender.expDate >= new Date().getTime()) {
 		cb();
-	} else if((sender.status != 1)){
+	} else if((sender.status != 1) || sender.expDate < new Date().getTime()){
 		cb(sender.address + ((sender && sender.countryCode)? sender.countryCode: '') + ' wallet is not verified.');
   } else {
 		modules.accounts.getAccount({address : recipientId}, function (err, row){
       if(!row && trs.type === TransactionTypes.SEND) {
         cb();
-      } else if(!row || row.status != 1){
+      } else if(!row || row.status != 1 || row.expDate < new Date().getTime()){
 				cb(recipientId + ((row && row.countryCode)? row.countryCode: '') +' wallet is not verified.');
 			} else {
 				cb();
@@ -1952,6 +1952,14 @@ shared.verifyAccount = function (req, cb) {
 			return cb('Invalid status');
     }
     
+    if(!body.expDate) {
+      body.expDate = new Date(new Date().setFullYear(new Date().getFullYear() + constants.expDateOfKYC)).getTime();
+    }
+
+    if(body.expDate < new Date().getTime()) {
+      return cb('Invalid date, expiry date should be greater than today date');
+    }
+    console.log("body.expDate: ", body.expDate);
     library.balancesSequence.add(function (cb) {
         if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
           modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {
@@ -2005,6 +2013,7 @@ shared.verifyAccount = function (req, cb) {
                   requester: keypair,
                   secondKeypair: secondKeypair,
                   message: body.message,
+                  expDate: body.expDate,
                   countryCode: body.countryCode
                 });
               } catch (e) {
@@ -2046,6 +2055,7 @@ shared.verifyAccount = function (req, cb) {
                 keypair: keypair,
                 secondKeypair: secondKeypair,
                 message: body.message,
+                expDate: body.expDate,
                 countryCode: body.countryCode
               });
             } catch (e) {
