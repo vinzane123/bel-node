@@ -1373,7 +1373,8 @@ private.attachApi = function () {
     "get /new": "newAccount",
     "put /merchant": "addMerchant",
     "get /merchants": "getMerchants",
-    "put /verifier": "addVerifier"
+    "put /verifier": "addVerifier",
+    "get /verifiers": "getVerifiers"
   });
 
   if (process.env.DEBUG && process.env.DEBUG.toUpperCase() == "TRUE") {
@@ -2273,7 +2274,7 @@ shared.getMerchants = function (req, cb) {
       merchants.forEach(function(merchant) {
         merchant.address = merchant.address.concat(merchant.countryCode);
       });
-      cb(null, {data: merchants });
+      cb(null, {data: merchants, count: merchants.length });
     });
 
   });
@@ -2427,6 +2428,49 @@ shared.addVerifier = function (req, cb) {
       }
       cb(null, {transactionId: transaction[0].id });
     });
+  });
+}
+
+shared.getVerifiers = function (req, cb) {
+  var query = req.body;
+  library.scheme.validate(query, {
+    type: 'object',
+    properties: {
+      address: {
+        type: "string",
+        minLength: 1
+      },
+      limit: {
+        type: "integer",
+        minimum: 0,
+        maximum: 101
+      },
+      offset: {
+        type: "integer",
+        minimum: 0
+      },
+      orderBy: {
+        type: "string"
+      }
+    }
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    self.getAccounts({
+      isVerifier: 1,
+      sort: { "publicKey": 1 }
+    }, ["verifierName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, verifiers) {
+      if (err) {
+        return cb(err.toString());
+      }
+      verifiers.forEach(function(verifier) {
+        verifier.address = verifier.address.concat(verifier.countryCode);
+      });
+      cb(null, {data: verifiers, count: verifiers.length });
+    });
+
   });
 }
 
