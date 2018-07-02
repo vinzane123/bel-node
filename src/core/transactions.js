@@ -1060,6 +1060,11 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
   var addresses = [];
   var payload = [];
   var addressWithCountryCode = [];
+  
+  if(sender.address == constants.coinBase) {
+    var address = sender.address.concat((sender.countryCode)? sender.countryCode: '');
+    return cb("transaction can't be done with this account " + address);
+  }
   if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
     cb();
   } else {
@@ -1108,6 +1113,11 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
 private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
+  if(sender.address == constants.coinBase) {
+    var address = sender.address.concat((sender.countryCode)? sender.countryCode: '');
+    return cb("transaction can't be done with this account " + address);
+  }
+  
 	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
 		httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
