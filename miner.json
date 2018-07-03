@@ -1,7 +1,11 @@
 {
     "minerAddresses": [
-	{
+	    {
             "address": "6232988412937045830IN",
+            "countryCode": "IN"
+        },
+        {
+            "address": "6518038767050467653IN",
             "countryCode": "IN"
         },
         {
