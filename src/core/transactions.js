@@ -1113,7 +1113,7 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
 private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
-  if(sender.address == constants.coinBase) {
+  if(sender.address == constants.coinBase && trs.type == TransactionTypes.SEND) {
     var address = sender.address.concat((sender.countryCode)? sender.countryCode: '');
     return cb("transaction can't be done with this account " + address);
   }

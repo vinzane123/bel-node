@@ -1388,8 +1388,10 @@ private.attachApi = function () {
     "get /new": "newAccount",
     "put /merchant": "addMerchant",
     "get /merchants": "getMerchants",
+    "get /merchants/get": "getMerchant",
     "put /verifier": "addVerifier",
-    "get /verifiers": "getVerifiers"
+    "get /verifiers": "getVerifiers",
+    "get /verifiers/get": "getVerifier"
   });
 
   if (process.env.DEBUG && process.env.DEBUG.toUpperCase() == "TRUE") {
@@ -2295,6 +2297,63 @@ shared.getMerchants = function (req, cb) {
   });
 }
 
+shared.getMerchant = function (req, cb) {
+  var query = req.body;
+  var queryJSON = {
+    isMerchant: 1
+  }; 
+  library.scheme.validate(query, {
+    type: "object",
+    properties: {
+      address: {
+        type: "string"
+      },
+      merchantName: {
+        type: "string"
+      }
+    }
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    if(!(query.address || query.merchantName)) {
+      return cb("missing required params :address or merchantName");
+    }
+
+    if(query.address) {
+      queryJSON.address = addressHelper.removeCountryCodeFromAddress(query.address);
+    }
+
+    if(query.merchantName) {
+      queryJSON.merchantName = query.merchantName;
+    }
+    
+    modules.accounts.getAccount(queryJSON, function(err, account) {
+      if(err) {
+        return cb(err);
+      }
+
+      if(!account) {
+        return cb("merchant not found");
+      }
+      if(!account.isMerchant) {
+        return cb("account is not merchant");
+      }
+      
+      cb(null, {
+        address: account.address.concat((account.countryCode)? account.countryCode: ''),
+        publicKey: account.publicKey,
+        vote: account.vote,
+        producedblocks: account.producedblocks,
+        missedblocks: account.missedblocks,
+        countryCode: account.countryCode,
+        merchantName: account.merchantName,
+      });
+    });
+  });
+}
+
 shared.addVerifier = function (req, cb) {
   var body = req.body;
   library.scheme.validate(body, {
@@ -2486,6 +2545,63 @@ shared.getVerifiers = function (req, cb) {
       cb(null, {data: verifiers, count: verifiers.length });
     });
 
+  });
+}
+
+shared.getVerifier = function (req, cb) {
+  var query = req.body;
+  var queryJSON = {
+    isVerifier: 1
+  }; 
+  library.scheme.validate(query, {
+    type: "object",
+    properties: {
+      address: {
+        type: "string"
+      },
+      verifierName: {
+        type: "string"
+      }
+    }
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    if(!(query.address || query.verifierName)) {
+      return cb("missing required params :address or verifierName");
+    }
+
+    if(query.address) {
+      queryJSON.address = addressHelper.removeCountryCodeFromAddress(query.address);
+    }
+
+    if(query.verifierName) {
+      queryJSON.verifierName = query.verifierName;
+    }
+    
+    modules.accounts.getAccount(queryJSON, function(err, account) {
+      if(err) {
+        return cb(err);
+      }
+
+      if(!account) {
+        return cb("verifier not found");
+      }
+      if(!account.isVerifier) {
+        return cb("account is not verifier");
+      }
+      
+      cb(null, {
+        address: account.address.concat((account.countryCode)? account.countryCode: ''),
+        publicKey: account.publicKey,
+        vote: account.vote,
+        producedblocks: account.producedblocks,
+        missedblocks: account.missedblocks,
+        countryCode: account.countryCode,
+        verifierName: account.verifierName,
+      });
+    });
   });
 }
 
