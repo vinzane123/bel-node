@@ -2077,7 +2077,9 @@ shared.verifyAccount = function (req, cb) {
             /*if(account.countryCode != body.countryCode) {
               return cb("Account country code mismatched!");
             }*/
-    
+            if(account.status) {
+              return cb('account already verified');
+            }
             if (account.secondSignature && !body.secondSecret) {
               return cb("Invalid second passphrase");
             }
