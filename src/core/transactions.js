@@ -320,6 +320,10 @@ function MerchantTransfer () {
 
 	this.verify = function (trs, sender, cb) {
 
+    if(!sender.isMerchant) {
+      return cb("account is not merchant");
+    }
+
 		if (!trs.recipientId) {
 			return setImmediate(cb, 'Invalid recipient');
 		}
@@ -339,10 +343,22 @@ function MerchantTransfer () {
       }
     }
 
-    cb(null, trs);
+    modules.accounts.getAccount({address: trs.recipientId}, function(err, recipient) {
+      if(err) {
+        return cb(err);
+      }
+      if(!recipient) {
+        return cb("Recipient not found!");
+      }
+      
+      if(!recipient.isVerifier) {
+        return cb("Recipient must be verifier!");
+      }
+      cb(null, trs);
+    });
 	};
 
-	this.process = function (trs, sender, cb) {    
+	this.process = function (trs, sender, cb) {
     var key = sender.address + ':' + trs.type;
     if (library.oneoff.has(key)) {
       return setImmediate(cb, 'Double submit');
@@ -1532,7 +1548,6 @@ shared.getTransaction = function (req, cb) {
 
 shared.getMerchantTransactions = function (req, cb) {
   var query = req.body;
-  query.address = addressHelper.removeCountryCodeFromAddress(query.address);
   library.scheme.validate(query, {
     type: 'object',
     properties: {
@@ -1546,8 +1561,21 @@ shared.getMerchantTransactions = function (req, cb) {
     if (err) {
       return cb(err[0].message);
     }
-
+    var conCode = addressHelper.getCountryCodeFromAddress(query.address);
+    query.address = addressHelper.removeCountryCodeFromAddress(query.address);
     modules.accounts.getAccount({address: query.address}, function(err, account) {
+      if(err) {
+        return cb(err);
+      }
+      if(!account) {
+        return cb('account not found!');
+      }
+      if(!account.isMerchant) {
+        return cb('account is not merchant');
+      }
+      if(conCode != account.countryCode) {
+        return cb('country code mismatched');
+      }
       var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'";
       params = {};
       fields = ["merchantId", "payFor", "recipientId", "amount"];
@@ -1965,6 +1993,10 @@ shared.verifyAccount = function (req, cb) {
     
     if(!body.expDate) {
       body.expDate = new Date(new Date().setFullYear(new Date().getFullYear() + constants.expDateOfKYC)).getTime();
+    }
+    
+    if(isNaN(body.expDate.valueOf())) {
+      return cb('Invalid date formate');
     }
 
     if(body.expDate < new Date().getTime()) {
@@ -3235,6 +3267,10 @@ shared.attachWalletThroughMerchant = function (req, cb) {
               return cb("Invalid second passphrase");
             }
 
+            if (!account.isMerchant) {
+              return cb("account is not merchant");
+            }
+
             var secondKeypair = null;
 
             if (account.secondSignature) {
@@ -3359,12 +3395,16 @@ shared.addMerchantTransactions = function (req, cb) {
           return cb("Recipient not found!");
         }
         
+        if(!recipient.isVerifier) {
+          return cb("Recipient must be verifier!");
+        }
+
         if(body.recepientCountryCode != recipient.countryCode) {
           return cb("Recipient country code mismatched!");
         }
 
         if (!recipientId) {
-          return cb("Recipient not found");
+          return cb("Recipient not found!");
         }
 
         if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
@@ -3438,6 +3478,9 @@ shared.addMerchantTransactions = function (req, cb) {
             }
             if (!account) {
               return cb("Account not found");
+            }
+            if (!account.isMerchant) {
+              return cb("account is not merchant");
             }
             //if(account.countryCode) {
               if(account.countryCode != body.senderCountryCode) {

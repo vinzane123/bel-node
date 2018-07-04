@@ -2279,17 +2279,22 @@ shared.getMerchants = function (req, cb) {
       return cb(err[0].message);
     }
 
-    self.getAccounts({
-      isMerchant: 1,
-      sort: { "publicKey": 1 }
-    }, ["merchantName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, merchants) {
-      if (err) {
-        return cb(err.toString());
-      }
-      merchants.forEach(function(merchant) {
-        merchant.address = merchant.address.concat(merchant.countryCode);
+    library.dbLite.query("SELECT count(*) FROM mem_accounts WHERE isMerchant=1", {}, ['count'], function(err, row) {
+      var count = row[0].count;
+      self.getAccounts({
+        isMerchant: 1,
+        offset: query.offset,
+        limit: query.limit,
+        sort: { "publicKey": 1 }
+      }, ["merchantName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, merchants) {
+        if (err) {
+          return cb(err.toString());
+        }
+        merchants.forEach(function(merchant) {
+          merchant.address = merchant.address.concat(merchant.countryCode);
+        });
+        cb(null, {data: merchants, count: count });
       });
-      cb(null, {data: merchants, count: merchants.length });
     });
 
   });
@@ -2316,10 +2321,11 @@ shared.getMerchant = function (req, cb) {
     }
 
     if(!(query.address || query.merchantName)) {
-      return cb("missing required params :address or merchantName");
+      return cb("missing required params :address or merchantName!");
     }
 
     if(query.address) {
+      var conCode = addressHelper.getCountryCodeFromAddress(query.address);
       queryJSON.address = addressHelper.removeCountryCodeFromAddress(query.address);
     }
 
@@ -2333,12 +2339,14 @@ shared.getMerchant = function (req, cb) {
       }
 
       if(!account) {
-        return cb("merchant not found");
+        return cb("merchant not found!");
       }
       if(!account.isMerchant) {
-        return cb("account is not merchant");
+        return cb("account is not merchant!");
       }
-      
+      if(conCode != account.countryCode) {
+        return cb("country code mismatched!");
+      }
       cb(null, {
         address: account.address.concat((account.countryCode)? account.countryCode: ''),
         publicKey: account.publicKey,
@@ -2530,19 +2538,23 @@ shared.getVerifiers = function (req, cb) {
       return cb(err[0].message);
     }
 
-    self.getAccounts({
-      isVerifier: 1,
-      sort: { "publicKey": 1 }
-    }, ["verifierName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, verifiers) {
-      if (err) {
-        return cb(err.toString());
-      }
-      verifiers.forEach(function(verifier) {
-        verifier.address = verifier.address.concat(verifier.countryCode);
+    library.dbLite.query("SELECT count(*) FROM mem_accounts WHERE isVerifier=1", {}, ['count'], function(err, row) {
+      var count = row[0].count;
+      self.getAccounts({
+        isVerifier: 1,
+        offset: query.offset,
+        limit: query.limit,
+        sort: { "publicKey": 1 }
+      }, ["verifierName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, verifiers) {
+        if (err) {
+          return cb(err.toString());
+        }
+        verifiers.forEach(function(verifier) {
+          verifier.address = verifier.address.concat(verifier.countryCode);
+        });
+        cb(null, {data: verifiers, count: count });
       });
-      cb(null, {data: verifiers, count: verifiers.length });
     });
-
   });
 }
 
@@ -2571,6 +2583,7 @@ shared.getVerifier = function (req, cb) {
     }
 
     if(query.address) {
+      var conCode = addressHelper.getCountryCodeFromAddress(query.address);
       queryJSON.address = addressHelper.removeCountryCodeFromAddress(query.address);
     }
 
@@ -2589,7 +2602,9 @@ shared.getVerifier = function (req, cb) {
       if(!account.isVerifier) {
         return cb("account is not verifier");
       }
-      
+      if(conCode != account.countryCode) {
+        return cb("country code mismatched!");
+      }
       cb(null, {
         address: account.address.concat((account.countryCode)? account.countryCode: ''),
         publicKey: account.publicKey,
