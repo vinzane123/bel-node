@@ -3261,16 +3261,16 @@ shared.attachWalletThroughMerchant = function (req, cb) {
               return cb("Account not found");
             }
             
+            if (!account.isMerchant) {
+              return cb("account is not merchant");
+            }
+            
             if(account.countryCode != body.countryCode) {
               return cb("Account country code mismatched!");
             }
             
             if (account.secondSignature && !body.secondSecret) {
               return cb("Invalid second passphrase");
-            }
-
-            if (!account.isMerchant) {
-              return cb("account is not merchant");
             }
 
             var secondKeypair = null;
