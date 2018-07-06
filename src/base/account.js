@@ -701,17 +701,33 @@ Account.prototype.createTables = function (cb) {
         type: "String",
         length: 50,
         not_null: true
-      }, {
+      },
+      {
+        name: "merchantCountryCode",
+        type: "String",
+        length: 2
+      }, 
+      {
         name: "payFor",
         type: "String",
         length: 64,
         not_null: true
       },
       {
+        name: "payForCountryCode",
+        type: "String",
+        length: 2
+      },
+      {
         name: "recipientId",
         type: "String",
         length: 64,
         not_null: true
+      },
+      {
+        name: "recepientCountryCode",
+        type: "String",
+        length: 2
       },
       {
         name: "amount",
@@ -724,6 +740,15 @@ Account.prototype.createTables = function (cb) {
         },
         conv: Number,
         default: 0
+      },
+      {
+        name: "timestamp",
+        type: "BigInt",
+        filter: {
+          required: true,
+          type: "integer",
+        },
+        conv: Number
       }
     ],
     foreignKeys: [

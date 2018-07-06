@@ -460,11 +460,15 @@ function MerchantTransfer () {
       payFor: trs.asset.merchant.payFor,
       transactionId: trs.id
     }, function(err) {
-      library.dbLite.query("INSERT INTO mem_accounts_merchant_trs(merchantId, payFor, recipientId, amount) VALUES($merchantId, $payFor, $recipientId, $amount)", {
+      library.dbLite.query("INSERT INTO mem_accounts_merchant_trs(merchantId, merchantCountryCode, payFor, payForCountryCode, recipientId, recepientCountryCode, amount, timestamp) VALUES($merchantId, $merchantCountryCode, $payFor, $payForCountryCode, $recipientId, $recepientCountryCode, $amount, $timestamp)", {
         merchantId: trs.senderId,
+        merchantCountryCode: trs.countryCode,
         payFor: trs.asset.merchant.payFor,
+        payForCountryCode: trs.asset.merchant.payForCountryCode,
         recipientId: trs.recipientId,
-        amount: trs.amount
+        recepientCountryCode: trs.asset.merchant.countryCode,
+        amount: trs.amount,
+        timestamp: slots.getTime()
       }, function(err) {
         var data = {
           address: trs.asset.merchant.payFor,
@@ -1563,6 +1567,15 @@ shared.getMerchantTransactions = function (req, cb) {
       address: {
         type: 'string',
         minLength: 1
+      },
+      limit: {
+        type: "integer",
+        minimum: 0,
+        maximum: 100
+      },
+      offset: {
+        type: "integer",
+        minimum: 0
       }
     },
     required: ['address']
@@ -1583,16 +1596,25 @@ shared.getMerchantTransactions = function (req, cb) {
         return cb('account is not merchant');
       }
       if(conCode != account.countryCode) {
-        return cb('country code mismatched');
+        return cb('country code mismatched'); 
       }
-      var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'";
+      
+      var filter = "";
+      if(req.body.limit) {
+        filter += " limit " +req.body.limit
+      }
+      if(req.body.offset) {
+        filter += " offset " +req.body.offset;
+      }
+      
+      var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'" + filter;
       params = {};
-      fields = ["merchantId", "payFor", "recipientId", "amount"];
+      fields = ["merchantId", "merchantCountryCode", "payFor", "payForCountryCode", "recipientId", "recepientCountryCode", "amount", "timestamp"];
       library.dbLite.query(queryString, params, fields, function(err, rows) {
         rows.forEach(function(row) {
-          row.merchantId = row.merchantId.concat(account.countryCode);
-          row.payFor = row.payFor.concat(account.countryCode);
-          row.recipientId = row.recipientId.concat(account.countryCode);
+          row.merchantId = row.merchantId.concat(row.merchantCountryCode);
+          row.payFor = row.payFor.concat(row.payForCountryCode);
+          row.recipientId = row.recipientId.concat(row.recepientCountryCode);
         });
         cb(null, { data: rows });
       });
