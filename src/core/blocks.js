@@ -108,6 +108,7 @@ private.blocksDataFields = {
   'mw_status': String,
   'mt_countryCode': String,
   'mt_payFor': String,
+  'mt_payForCountryCode': String,
   'mr_merchantName': String,
   'vr_verifierName': String
 };
@@ -142,7 +143,7 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "cc.countryCode, " +
   "acw.status, acw.secondWalletAddress, acw.currency, " +
   "mw.attachFrom, mw.attachTo, mw.currency, mw.status, " +
-  "mt.countryCode, mt.payFor, " +
+  "mt.countryCode, mt.payFor, mt.payForCountryCode, " +
   "mr.merchantName, " +
   "vr.verifierName " +
   "FROM blocks b " +

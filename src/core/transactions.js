@@ -309,7 +309,8 @@ function MerchantTransfer () {
     trs.countryCode = data.countryCode;
     trs.asset.merchant = {
       countryCode:  data.recepientCountryCode,
-      payFor: data.payFor
+      payFor: data.payFor,
+      payForCountryCode: data.payForCountryCode
     };
 		return trs;
 	};
@@ -365,7 +366,16 @@ function MerchantTransfer () {
     }
     library.oneoff.set(key, true);
     
-    return setImmediate(cb, null, trs);
+    modules.accounts.getAccount({address: trs.payFor}, function(err, account) {
+      if(err) {
+        return cb(err);
+      }
+      if(account && (account.countryCode != trs.asset.merchant.payForCountryCode)) {
+        return cb("payFor country code mismatched!");
+      }
+      
+      return setImmediate(cb, null, trs);
+    });
 	};
 
 	this.getBytes = function (trs) {
@@ -437,7 +447,8 @@ function MerchantTransfer () {
 		} else {
 			var merchant = {
         countryCode: raw.mt_countryCode,
-        payFor: raw.mt_payFor
+        payFor: raw.mt_payFor,
+        payForCountryCode: raw.mt_payForCountryCode
       };
 			return {merchant: merchant};
 		}
@@ -454,7 +465,13 @@ function MerchantTransfer () {
         payFor: trs.asset.merchant.payFor,
         recipientId: trs.recipientId,
         amount: trs.amount
-      }, cb);
+      }, function(err) {
+        var data = {
+          address: trs.asset.merchant.payFor,
+          countryCode: trs.asset.merchant.payForCountryCode
+        };
+        modules.accounts.setAccountAndGet(data, cb);
+      });
     });
   };
 
@@ -1077,10 +1094,6 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
   var payload = [];
   var addressWithCountryCode = [];
   
-  if(sender.address == constants.coinBase) {
-    var address = sender.address.concat((sender.countryCode)? sender.countryCode: '');
-    return cb("transaction can't be done with this account " + address);
-  }
   if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
     cb();
   } else {
@@ -1129,10 +1142,6 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
 private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
-  if(sender.address == constants.coinBase && trs.type == TransactionTypes.SEND) {
-    var address = sender.address.concat((sender.countryCode)? sender.countryCode: '');
-    return cb("transaction can't be done with this account " + address);
-  }
   
 	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
@@ -3358,6 +3367,11 @@ shared.addMerchantTransactions = function (req, cb) {
       payFor: {
         type: "string",
         minLength: 1
+      },
+      payForCountryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
       }
     },
     required: ["secret", "amount", "recipientId", "payFor", "senderCountryCode", "recepientCountryCode"]
@@ -3380,8 +3394,11 @@ shared.addMerchantTransactions = function (req, cb) {
     var recConCode = addressHelper.getCountryCodeFromAddress(body.recipientId);
     var recipientId = addressHelper.removeCountryCodeFromAddress(body.recipientId);
 
-    if(body.recepientCountryCode != payForConCode || body.recepientCountryCode != recConCode) {
-      return cb("country code mismatched!");
+    if(body.recepientCountryCode != recConCode) {
+      return cb("recipient country code mismatched!");
+    }
+    if(body.payForCountryCode != payForConCode) {
+      return cb("payFor country code mismatched!");
     }
     var query = { address: recipientId };
 
@@ -3390,13 +3407,15 @@ shared.addMerchantTransactions = function (req, cb) {
         if (err) {
           return cb(err.toString());
         }
-        if(body.recepientCountryCode != recConCode) {
-          return cb("Recipient country code mismatched!");
-        }
+      
         if(!recipient) {
           return cb("Recipient not found!");
         }
         
+        if(recipient.countryCode != body.recepientCountryCode) {
+          return cb("Recipient country code mismatched!");
+        }
+
         if(!recipient.isVerifier) {
           return cb("Recipient must be verifier!");
         }
@@ -3463,7 +3482,8 @@ shared.addMerchantTransactions = function (req, cb) {
                   secondKeypair: secondKeypair,
                   message: body.message,
                   countryCode: body.senderCountryCode,
-                  recepientCountryCode: body.recepientCountryCode
+                  recepientCountryCode: body.recepientCountryCode,
+                  payForCountryCode: body.payForCountryCode
                 });
               } catch (e) {
                 return cb(e.toString());
@@ -3514,7 +3534,8 @@ shared.addMerchantTransactions = function (req, cb) {
                 secondKeypair: secondKeypair,
                 message: body.message,
                 countryCode: body.senderCountryCode,
-                recepientCountryCode: body.recepientCountryCode
+                recepientCountryCode: body.recepientCountryCode,
+                payForCountryCode: body.payForCountryCode
               });
             } catch (e) {
               return cb(e.toString());
