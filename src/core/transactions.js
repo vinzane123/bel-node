@@ -1560,6 +1560,7 @@ shared.getTransaction = function (req, cb) {
 }
 
 shared.getMerchantTransactions = function (req, cb) {
+  console.log("calling");
   var query = req.body;
   library.scheme.validate(query, {
     type: 'object',
@@ -1606,17 +1607,19 @@ shared.getMerchantTransactions = function (req, cb) {
       if(req.body.offset) {
         filter += " offset " +req.body.offset;
       }
-      
-      var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'" + filter;
-      params = {};
-      fields = ["merchantId", "merchantCountryCode", "payFor", "payForCountryCode", "recipientId", "recepientCountryCode", "amount", "timestamp"];
-      library.dbLite.query(queryString, params, fields, function(err, rows) {
-        rows.forEach(function(row) {
-          row.merchantId = row.merchantId.concat(row.merchantCountryCode);
-          row.payFor = row.payFor.concat(row.payForCountryCode);
-          row.recipientId = row.recipientId.concat(row.recepientCountryCode);
+      library.dbLite.query("SELECT count(*) FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'", {}, ['count'], function(err, row) {
+        var count = row[0].count;
+        var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'" + filter;
+        params = {};
+        fields = ["merchantId", "merchantCountryCode", "payFor", "payForCountryCode", "recipientId", "recepientCountryCode", "amount", "timestamp"];
+        library.dbLite.query(queryString, params, fields, function(err, rows) {
+          rows.forEach(function(row) {
+            row.merchantId = row.merchantId.concat(row.merchantCountryCode);
+            row.payFor = row.payFor.concat(row.payForCountryCode);
+            row.recipientId = row.recipientId.concat(row.recepientCountryCode);
+          });
+          cb(null, { data: rows, count: count });
         });
-        cb(null, { data: rows });
       });
     });
   });
