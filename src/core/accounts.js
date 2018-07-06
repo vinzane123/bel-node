@@ -2257,7 +2257,7 @@ shared.getMerchants = function (req, cb) {
   library.scheme.validate(query, {
     type: 'object',
     properties: {
-      address: {
+      countryCode: {
         type: "string",
         minLength: 1
       },
@@ -2281,12 +2281,16 @@ shared.getMerchants = function (req, cb) {
 
     library.dbLite.query("SELECT count(*) FROM mem_accounts WHERE isMerchant=1", {}, ['count'], function(err, row) {
       var count = row[0].count;
-      self.getAccounts({
+      var data = {
         isMerchant: 1,
         offset: query.offset,
         limit: query.limit,
         sort: { "publicKey": 1 }
-      }, ["merchantName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, merchants) {
+      };
+      if(query.countryCode) {
+        data.countryCode = query.countryCode;
+      }
+      self.getAccounts(data, ["merchantName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, merchants) {
         if (err) {
           return cb(err.toString());
         }
