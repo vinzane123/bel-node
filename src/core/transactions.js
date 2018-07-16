@@ -348,7 +348,7 @@ function MerchantTransfer () {
 	};
 
 	this.process = function (trs, sender, cb) {
-    var key = trs.payFor + ':' + trs.type;
+    var key = sender.address + ':' + trs.type;
     if (library.oneoff.has(key)) {
       return setImmediate(cb, 'Double submit');
     }
@@ -393,7 +393,7 @@ function MerchantTransfer () {
         cb(err);
       });
     });
-    var key = trs.payFor + ':' + trs.type
+    var key = sender.address + ':' + trs.type
     library.oneoff.delete(key);
 	};
 
@@ -1087,7 +1087,42 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
   var addressWithCountryCode = [];
   
   if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
-    cb();
+    var recipientId = trs.recipientId;
+    modules.accounts.getAccount({address : recipientId}, function (err, recipient){
+      if(!recipient || recipient.status != 1 || recipient.expDate < new Date().getTime()){
+				cb(recipientId + ((recipient && recipient.countryCode)? recipient.countryCode: '') +' wallet is not verified.');
+			} else {
+				cb();
+			}
+		});
+  } else if(trs.type === TransactionTypes.MERCHANT) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      if(!error && result){
+        if(!result.data[addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
+  } else if(trs.type === TransactionTypes.VERIFIER) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      if(!error && result){
+        if(!result.data[addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
   } else {
     if(trs.recipientId){
       addresses.push(trs.recipientId);
@@ -1196,6 +1231,34 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
           cb('Something went wrong.');
         }
       });
+    });
+  } else if(trs.type === TransactionTypes.MERCHANT) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      if(!error && result){
+        if(!result.data[addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
+  } else if(trs.type === TransactionTypes.VERIFIER) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      if(!error && result){
+        if(!result.data[addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
     });
   } else if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
     modules.accounts.getAccount({address : recipientId}, function (err, recipient){
