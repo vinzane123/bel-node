@@ -1098,9 +1098,20 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
   } else if(trs.type === TransactionTypes.MERCHANT) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
     httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      result = {
+        "data": {
+          "7319110840628963020IN": {"7319110840628963020IN":false,"merchant":false}
+        },
+        "fielderror": null,
+        "message": "User's status validated successfully.",
+        "isSuccess": true,
+        "status": "OK",
+        "timestamp": 1531821749179
+      };
       library.logger.info('response from the KYC server: ', result);
-      if(!error && result){
-        if(!result.data[addressWithCountryCode]) {
+      if(!error && result && result.data){
+        console.log("result.data[addressWithCountryCode][addressWithCountryCode]: ", result.data[addressWithCountryCode][addressWithCountryCode]);
+        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
           return cb(addressWithCountryCode + ' wallet is not verified.');
         } else  {
 					cb();
@@ -1236,9 +1247,11 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
     httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
-      if(!error && result){
-        if(!result.data[addressWithCountryCode]) {
+      if(!error && result && result.data){
+        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
           return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else if(!result.data[addressWithCountryCode]['merchant']) {
+          return cb(addressWithCountryCode + ' is not merchant');
         } else  {
 					cb();
 				}
@@ -1250,9 +1263,11 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
     httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
-      if(!error && result){
-        if(!result.data[addressWithCountryCode]) {
+      if(!error && result && result.data){
+        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
           return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else if(!result.data[addressWithCountryCode]['verifier']) {
+          return cb(addressWithCountryCode + ' is not verifier');
         } else  {
 					cb();
 				}
