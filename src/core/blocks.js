@@ -1751,7 +1751,7 @@ shared.getSupply = function (req, cb) {
     return cb("Blockchain is loading")
   }
   var query = req.body, height = private.lastBlock.height;
-  cb(null, { supply: private.blockStatus.calcSupply(height) });
+  cb(null, { totalSupply: constants.totalAmount, currentSupply: private.blockStatus.calcSupply(height) });
 }
 
 shared.getStatus = function (req, cb) {

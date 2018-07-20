@@ -16,6 +16,7 @@ module.exports = {
   confirmationLength: 77,
   fixedPoint : Math.pow(10, 10),
   totalAmount: 2100000000000000000,
+  initialSupply: 174200000000000000,
   maxTxsPerBlock: 500,
   initialAmount: 20000000000,
   expDateOfKYC: 2, // default exp date of kyc in years

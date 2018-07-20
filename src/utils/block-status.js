@@ -80,7 +80,7 @@ function BlockStatus() {
     var height = parseHeight(height);
     height -= height % 101;
     var milestone = this.calcMilestone(height);
-    var supply    = constants.totalAmount;
+    var supply    = constants.initialSupply;
     var rewards   = [];
 
     if (height <= 0) {
