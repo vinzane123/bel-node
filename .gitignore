@@ -5,8 +5,7 @@
 KycMangement/Servers2/
 bin/
 */target/
-node_modules/*
-!node_modules/asch-sandbox/
+node_modules/
 dapps/
 logs/
 blockchain.db
