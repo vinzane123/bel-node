@@ -6,3 +6,6 @@ KycMangement/Servers2/
 bin/
 */target/
 node_modules/
+dapps/
+logs/
+blockchain.db
