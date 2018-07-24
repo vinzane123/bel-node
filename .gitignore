@@ -9,4 +9,4 @@ node_modules/
 dapps/
 logs/
 blockchain.db
-public/
+public/*
