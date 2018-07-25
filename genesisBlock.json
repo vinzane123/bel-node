@@ -3,7 +3,7 @@
     "totalAmount": 2100000000000000000,
     "totalFee": 0,
     "reward": 0,
-    "payloadHash": "6e1aebfd4d91d36e523527204f193b59d6df864fab509a25072b06f33d1cf274",
+    "payloadHash": "a3207371a2a6b7047f87ef44aaf45daceaab99848c839911b7e3fa6cdadfc068",
     "timestamp": 0,
     "numberOfTransactions": 103,
     "payloadLength": 20326,
@@ -12,7 +12,7 @@
     "transactions": [
         {
             "type": 0,
-            "amount": 2100000000000000000,
+            "amount": 174200000000000000,
             "fee": 0,
             "timestamp": 0,
             "recipientId": "6232988412937045830",
@@ -1758,5 +1758,5 @@
     ],
     "height": 1,
     "blockSignature": "b5f916083f9188090057d5d9609d3ef43ab58a4568e525a3377ffc1d46c655e764dd5fb5a1b78fb59a40c92d58ec5d27b1d648fc3833d22a0bbe63d408886d0f",
-    "id": "13893050298551625255"
+    "id": "9376296244589445734"
 }

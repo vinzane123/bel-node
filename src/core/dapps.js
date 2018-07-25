@@ -6,7 +6,7 @@ var crypto = require('crypto');
 var bignum = require('bignumber')
 var request = require('request');
 var ed = require('../utils/ed.js');
-var Sandbox = require('asch-sandbox');
+var Sandbox = require('bel-sandbox');
 var rmdir = require('rimraf');
 var ip = require('ip');
 var valid_url = require('valid-url');
@@ -592,7 +592,7 @@ function DApp() {
   this.create = function (data, trs) {
     trs.recipientId = null;
     trs.amount = 0;
-
+    trs.countryCode = data.countryCode;
     trs.asset.dapp = {
       category: data.category,
       name: data.name,
@@ -1042,9 +1042,14 @@ private.attachApi = function () {
           type: "string",
           minLength: 1,
           maxLength: 2000
+        },
+        countryCode: {
+          type: "string",
+          minLength: 2,
+          maxLength: 2
         }
       },
-      required: ["secret", "type", "name", "category"]
+      required: ["secret", "type", "name", "category", "countryCode"]
     }, function (err, report, body) {
       if (err) return next(err);
       if (!report.isValid) return res.json({ success: false, error: report.issues });
@@ -1066,6 +1071,10 @@ private.attachApi = function () {
 
           if (!account) {
             return cb("Account not found");
+          }
+
+          if(account.countryCode != body.countryCode) {
+            return cb("Account country code mismatched!");
           }
 
           if (account.secondSignature && !body.secondSecret) {
@@ -1093,7 +1102,8 @@ private.attachApi = function () {
               link: body.link,
               icon: body.icon,
               delegates: body.delegates,
-              unlockDelegates: body.unlockDelegates
+              unlockDelegates: body.unlockDelegates,
+              countryCode: body.countryCode
             });
           } catch (e) {
             return cb(e.toString());

@@ -188,23 +188,12 @@ function InitialTransfer() {
   }
 
   this.process = function (trs, sender, cb) {
-    /*library.dbLite.query("SELECT type, amount FROM trs WHERE type='"+trs.type+"' AND recipientId='"+trs.recipientId+"'", {}, ['type', 'amount'], function(err, rows) {
-      var amount = 0;
-      rows.forEach(function(row, index) {
-        amount += parseInt(row.amount);
-      });
-    
-      var totalAmount = amount + trs.amount; 
-      if(totalAmount > constants.initialAmount) {
-        return cb('Initial amount exceeds, your amount transfer remaining: '+ (constants.initialAmount-amount));
-      }*/
-      var key = sender.address + ':' + trs.type
-      if (library.oneoff.has(key)) {
-        return setImmediate(cb, 'Double submit')
-      }
-      library.oneoff.set(key, true);
-      setImmediate(cb, null, trs);
-    //});
+    var key = sender.address + ':' + trs.type
+    if (library.oneoff.has(key)) {
+      return setImmediate(cb, 'Double submit')
+    }
+    library.oneoff.set(key, true);
+    setImmediate(cb, null, trs);
   }
 
   this.getBytes = function (trs) {
@@ -235,7 +224,7 @@ function InitialTransfer() {
       });
     });
     var key = sender.address + ':' + trs.type
-    library.oneoff.delete(key)
+    library.oneoff.delete(key);
   }
 
   this.undo = function (trs, block, sender, cb) {
@@ -277,7 +266,6 @@ function InitialTransfer() {
 			var countryCode = raw.cc_countryCode;
 			return {countryCode: countryCode};
 		}
-    return null;
   }
 
   this.dbSave = function (trs, cb) {
@@ -285,7 +273,6 @@ function InitialTransfer() {
       countryCode: trs.asset && trs.asset.countryCode? trs.asset.countryCode: '',
       transactionId: trs.id
     }, cb);
-    //setImmediate(cb);
   }
 
   this.ready = function (trs, sender) {
@@ -301,6 +288,196 @@ function InitialTransfer() {
   }
 }
 
+//Attach wallet through merchant
+function MerchantTransfer () {
+	this.create = function (data, trs) {
+    trs.payFor = data.payFor;
+		trs.recipientId = data.recipientId;
+    trs.amount = data.amount;
+    trs.countryCode = data.countryCode;
+    trs.asset.merchant = {
+      countryCode:  data.recepientCountryCode,
+      payFor: data.payFor,
+      payForCountryCode: data.payForCountryCode
+    };
+		return trs;
+	};
+
+	this.calculateFee = function (trs, sender) {
+    return library.base.block.calculateFee();
+	};
+
+	this.verify = function (trs, sender, cb) {
+
+    if(!sender.isMerchant) {
+      return cb("account is not merchant");
+    }
+
+		if (!trs.recipientId) {
+			return setImmediate(cb, 'Invalid recipient');
+		}
+
+    if (trs.amount <= 0) {
+      return cb("Invalid transaction amount");
+    }
+
+    if (trs.recipientId == sender.address) {
+      return cb("Invalid recipientId, cannot be your self");
+    }
+
+    if (!global.featureSwitch.enableMoreLockTypes) {
+      var lastBlock = modules.blocks.getLastBlock()
+      if (sender.lockHeight && lastBlock && lastBlock.height + 1 <= sender.lockHeight) {
+        return cb('Account is locked')
+      }
+    }
+
+    modules.accounts.getAccount({address: trs.recipientId}, function(err, recipient) {
+      if(err) {
+        return cb(err);
+      }
+      if(!recipient) {
+        return cb("Recipient not found!");
+      }
+      
+      if(!recipient.isVerifier) {
+        return cb("Recipient must be verifier!");
+      }
+      cb(null, trs);
+    });
+	};
+
+	this.process = function (trs, sender, cb) {
+    var key = sender.address + ':' + trs.type;
+    if (library.oneoff.has(key)) {
+      return setImmediate(cb, 'Double submit');
+    }
+    library.oneoff.set(key, true);
+    
+    modules.accounts.getAccount({address: trs.payFor}, function(err, account) {
+      if(err) {
+        return cb(err);
+      }
+      if(account && (account.countryCode != trs.asset.merchant.payForCountryCode)) {
+        return cb("payFor country code mismatched!");
+      }
+      
+      return setImmediate(cb, null, trs);
+    });
+	};
+
+	this.getBytes = function (trs) {
+		try {
+      var buf = trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? new Buffer(trs.asset.merchant.countryCode, 'utf8') : null;
+    } catch (e) {
+      throw Error(e.toString());
+    }
+
+    return buf;
+	};
+
+	this.apply = function (trs, block, sender, cb) {
+    var recepientCountryCode = (trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode)? trs.asset.merchant.countryCode: '';
+    modules.accounts.setAccountAndGet({ address: trs.recipientId, countryCode: recepientCountryCode }, function (err, recipient) {
+      if (err) {
+        return cb(err);
+      }
+
+      modules.accounts.mergeAccountAndGet({
+        address: trs.recipientId,
+        balance: trs.amount,
+        u_balance: trs.amount,
+        blockId: block.id,
+        round: modules.round.calc(block.height)
+      }, function (err) {
+        cb(err);
+      });
+    });
+    var key = sender.address + ':' + trs.type
+    library.oneoff.delete(key);
+	};
+
+	this.undo = function (trs, block, sender, cb) {
+    var recepientCountryCode = (trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode)? trs.asset.merchant.countryCode: '';    
+    modules.accounts.setAccountAndGet({ address: trs.recipientId, countryCode: recepientCountryCode }, function (err, recipient) {    
+      if (err) {
+        return cb(err);
+      }
+
+      modules.accounts.mergeAccountAndGet({
+        address: trs.recipientId,
+        balance: -trs.amount,
+        u_balance: -trs.amount,
+        blockId: block.id,
+        round: modules.round.calc(block.height)
+      }, function (err) {
+        cb(err);
+      });
+    });
+	};
+
+	this.applyUnconfirmed = function (trs, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.undoUnconfirmed = function (trs, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.objectNormalize = function (trs) {
+    delete trs.blockId;
+    return trs;
+	};
+
+	this.dbRead = function (raw) {
+		if (!raw.mt_countryCode) {
+			return null;
+		} else {
+			var merchant = {
+        countryCode: raw.mt_countryCode,
+        payFor: raw.mt_payFor,
+        payForCountryCode: raw.mt_payForCountryCode
+      };
+			return {merchant: merchant};
+		}
+	};
+
+	this.dbSave = function (trs, cb) {
+    library.dbLite.query("INSERT INTO merchant(countryCode, payFor, transactionId) VALUES($countryCode, $payFor, $transactionId)", {
+      countryCode: trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? trs.asset.merchant.countryCode: '',
+      payFor: trs.asset.merchant.payFor,
+      transactionId: trs.id
+    }, function(err) {
+      library.dbLite.query("INSERT INTO mem_accounts_merchant_trs(merchantId, merchantCountryCode, payFor, payForCountryCode, recipientId, recepientCountryCode, amount, timestamp) VALUES($merchantId, $merchantCountryCode, $payFor, $payForCountryCode, $recipientId, $recepientCountryCode, $amount, $timestamp)", {
+        merchantId: trs.senderId,
+        merchantCountryCode: trs.countryCode,
+        payFor: trs.asset.merchant.payFor,
+        payForCountryCode: trs.asset.merchant.payForCountryCode,
+        recipientId: trs.recipientId,
+        recepientCountryCode: trs.asset.merchant.countryCode,
+        amount: trs.amount,
+        timestamp: slots.getTime()
+      }, function(err) {
+        var data = {
+          address: trs.asset.merchant.payFor,
+          countryCode: trs.asset.merchant.payForCountryCode
+        };
+        modules.accounts.setAccountAndGet(data, cb);
+      });
+    });
+  };
+
+  this.ready = function (trs, sender) {
+    if (sender.multisignatures.length) {
+      if (!trs.signatures) {
+        return false;
+      }
+      return trs.signatures.length >= sender.multimin - 1;
+    } else {
+      return true;
+    }
+  }
+}
 function Storage() {
   this.create = function (data, trs) {
     trs.asset.storage = {
@@ -507,6 +684,7 @@ function Transactions(cb, scope) {
   library.base.transaction.attachAssetType(TransactionTypes.DOCUMENT_VERIFICATION_TRS, new InitialTransfer());  
   library.base.transaction.attachAssetType(TransactionTypes.STORAGE, new Storage());
   library.base.transaction.attachAssetType(TransactionTypes.LOCK, new Lock());
+  library.base.transaction.attachAssetType(TransactionTypes.MERCHANT_TRS, new MerchantTransfer());
 
   setImmediate(cb, null, self);
 }
@@ -535,7 +713,9 @@ private.attachApi = function () {
     "get /wallet/info": "getWalletInfo",
     "put /attach/belWallet": "attachBellWallet",
     'get /attached/wallets': "getAttachedWallets",
-    "put /merchant/attach/wallet": "attachWalletThroughMerchant"
+    "put /merchant/attach/wallet": "attachWalletThroughMerchant",
+    "put /merchant": "addMerchantTransactions",
+    "get /merchant/get": "getMerchantTransactions"
   });
 
   router.use(function (req, res, next) {
@@ -905,8 +1085,44 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
   var addresses = [];
   var payload = [];
   var addressWithCountryCode = [];
+  
   if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
-    cb();
+    var recipientId = trs.recipientId;
+    modules.accounts.getAccount({address : recipientId}, function (err, recipient){
+      if(!recipient || recipient.status != 1 || recipient.expDate < new Date().getTime()){
+				cb(recipientId + ((recipient && recipient.countryCode)? recipient.countryCode: '') +' wallet is not verified.');
+			} else {
+				cb();
+			}
+		});
+  } else if(trs.type === TransactionTypes.MERCHANT) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      if(!error && result && result.data){
+        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
+  } else if(trs.type === TransactionTypes.VERIFIER) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      if(!error && result){
+        if(!result.data[addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
   } else {
     if(trs.recipientId){
       addresses.push(trs.recipientId);
@@ -953,6 +1169,7 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
 private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
+  
 	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
 		httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
@@ -997,6 +1214,7 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
       });
 
       httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+        //result.data['3993821763104859620IN'] = false;
         library.logger.info('response from the KYC server: ', result);
         if(!error && result){
           var errorData;
@@ -1014,22 +1232,62 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
         }
       });
     });
+  } else if(trs.type === TransactionTypes.MERCHANT) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      result.data[addressWithCountryCode] = JSON.parse(result.data[addressWithCountryCode]);
+      if(!error && result && result.data){
+        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else if(!result.data[addressWithCountryCode]['merchant']) {
+          return cb(addressWithCountryCode + ' is not merchant');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
+  } else if(trs.type === TransactionTypes.VERIFIER) {
+    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
+    httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+      library.logger.info('response from the KYC server: ', result);
+      result.data[addressWithCountryCode] = JSON.parse(result.data[addressWithCountryCode]);
+      if(!error && result && result.data){
+        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
+          return cb(addressWithCountryCode + ' wallet is not verified.');
+        } else if(!result.data[addressWithCountryCode]['verifier']) {
+          return cb(addressWithCountryCode + ' is not verifier');
+        } else  {
+					cb();
+				}
+			} else {
+				cb('Something went wrong.');
+			}
+    });
   } else if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
-    cb();
-  } else if(!recipientId && sender.status == 1) {
+    modules.accounts.getAccount({address : recipientId}, function (err, recipient){
+      if(!recipient || recipient.status != 1 || recipient.expDate < new Date().getTime()){
+				cb(recipientId + ((recipient && recipient.countryCode)? recipient.countryCode: '') +' wallet is not verified.');
+			} else {
+				cb();
+			}
+		});
+  } else if(!recipientId && sender.status == 1 && sender.expDate >= new Date().getTime()) {
 		cb();
-	} else if((sender.status != 1)){
+	} else if((sender.status != 1) || sender.expDate < new Date().getTime()){
 		cb(sender.address + ((sender && sender.countryCode)? sender.countryCode: '') + ' wallet is not verified.');
   } else {
 		modules.accounts.getAccount({address : recipientId}, function (err, row){
       if(!row && trs.type === TransactionTypes.SEND) {
         cb();
-      } else if(!row || row.status != 1){
+      } else if(!row || row.status != 1 || row.expDate < new Date().getTime()){
 				cb(recipientId + ((row && row.countryCode)? row.countryCode: '') +' wallet is not verified.');
 			} else {
 				cb();
 			}
-		})
+		});
 	}
 };
 
@@ -1360,6 +1618,71 @@ shared.getTransaction = function (req, cb) {
       } else {
         return cb("Transaction not found");
       }
+    });
+  });
+}
+
+shared.getMerchantTransactions = function (req, cb) {
+  var query = req.body;
+  library.scheme.validate(query, {
+    type: 'object',
+    properties: {
+      address: {
+        type: 'string',
+        minLength: 1
+      },
+      limit: {
+        type: "integer",
+        minimum: 0,
+        maximum: 100
+      },
+      offset: {
+        type: "integer",
+        minimum: 0
+      }
+    },
+    required: ['address']
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+    var conCode = addressHelper.getCountryCodeFromAddress(query.address);
+    query.address = addressHelper.removeCountryCodeFromAddress(query.address);
+    modules.accounts.getAccount({address: query.address}, function(err, account) {
+      if(err) {
+        return cb(err);
+      }
+      if(!account) {
+        return cb('account not found!');
+      }
+      if(!account.isMerchant) {
+        return cb('account is not merchant');
+      }
+      if(conCode != account.countryCode) {
+        return cb('country code mismatched'); 
+      }
+      
+      var filter = "";
+      if(req.body.limit) {
+        filter += " limit " +req.body.limit
+      }
+      if(req.body.offset) {
+        filter += " offset " +req.body.offset;
+      }
+      library.dbLite.query("SELECT count(*) FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'", {}, ['count'], function(err, row) {
+        var count = row[0].count;
+        var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'" + filter;
+        params = {};
+        fields = ["merchantId", "merchantCountryCode", "payFor", "payForCountryCode", "recipientId", "recepientCountryCode", "amount", "timestamp"];
+        library.dbLite.query(queryString, params, fields, function(err, rows) {
+          rows.forEach(function(row) {
+            row.merchantId = row.merchantId.concat(row.merchantCountryCode);
+            row.payFor = row.payFor.concat(row.payForCountryCode);
+            row.recipientId = row.recipientId.concat(row.recepientCountryCode);
+          });
+          cb(null, { data: rows, count: count });
+        });
+      });
     });
   });
 }
@@ -1764,6 +2087,18 @@ shared.verifyAccount = function (req, cb) {
 			return cb('Invalid status');
     }
     
+    if(!body.expDate) {
+      body.expDate = new Date(new Date().setFullYear(new Date().getFullYear() + constants.expDateOfKYC)).getTime();
+    }
+    
+    if(isNaN(body.expDate.valueOf())) {
+      return cb('Invalid date formate');
+    }
+
+    if(body.expDate < new Date().getTime()) {
+      return cb('Invalid date, expiry date should be greater than today date');
+    }
+    
     library.balancesSequence.add(function (cb) {
         if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
           modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {
@@ -1817,6 +2152,7 @@ shared.verifyAccount = function (req, cb) {
                   requester: keypair,
                   secondKeypair: secondKeypair,
                   message: body.message,
+                  expDate: body.expDate,
                   countryCode: body.countryCode
                 });
               } catch (e) {
@@ -1837,7 +2173,9 @@ shared.verifyAccount = function (req, cb) {
             /*if(account.countryCode != body.countryCode) {
               return cb("Account country code mismatched!");
             }*/
-    
+            if(account.status) {
+              return cb('account already verified');
+            }
             if (account.secondSignature && !body.secondSecret) {
               return cb("Invalid second passphrase");
             }
@@ -1858,6 +2196,7 @@ shared.verifyAccount = function (req, cb) {
                 keypair: keypair,
                 secondKeypair: secondKeypair,
                 message: body.message,
+                expDate: body.expDate,
                 countryCode: body.countryCode
               });
             } catch (e) {
@@ -2481,30 +2820,29 @@ shared.initialTransactions = function (req, cb) {
     var address = addressHelper.removeCountryCodeFromAddress(body.recipientId);
     var query = { address: address };
 
+    if(body.recepientCountryCode != conCode) {
+      return cb("Recipient country code mismatched!");
+    }
+
     library.balancesSequence.add(function (cb) {
       modules.accounts.getAccount(query, function (err, recipient) {
         if (err) {
           return cb(err.toString());
         }
-        if(body.recepientCountryCode != conCode) {
-          return cb("Recipient country code mismatched!");
-        }
-        //var recipientId = recipient ? recipient.address : address;
-        if(recipient && recipient.countryCode) {
-          if(body.recepientCountryCode != recipient.countryCode) {
-            return cb("Recipient country code mismatched!");
-          }
-          if(addressHelper.generateAddressWithCountryCode(recipient.address, recipient.countryCode) != (body.recipientId)) {
-            return cb("Recipient Address mismatched!");
-          } else {
-            recipientId = recipient.address;
-          }
-        } else {
-          recipientId = address;
-        }
-        if (!recipientId) {
+
+        if (!recipient) {
           return cb("Recipient not found");
         }
+
+        if(body.recepientCountryCode != recipient.countryCode) {
+          return cb("Recipient country code mismatched!");
+        }
+
+        if(!recipient.isVerifier) {
+          return cb("Recipient must be verifier!");
+        }
+        
+        var recipientId = recipient.address; 
 
         if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
           modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {
@@ -2623,14 +2961,15 @@ shared.initialTransactions = function (req, cb) {
                 if (!account) {
                   return cb("Account not found");
                 }
-                //if(account.countryCode) {
-                  if(account.countryCode != body.senderCountryCode) {
-                    return cb("Account country code mismatched!");
-                  }
-                  if(addressHelper.generateAddressWithCountryCode(account.address, account.countryCode) != addressHelper.generateAddressWithCountryCode(address, body.senderCountryCode)) {
-                    return cb("Account Address mismatched!");
-                  }
-                //}
+                
+                if(account.countryCode != body.senderCountryCode) {
+                  return cb("Account country code mismatched!");
+                }
+
+                if(addressHelper.generateAddressWithCountryCode(account.address, account.countryCode) != addressHelper.generateAddressWithCountryCode(address, body.senderCountryCode)) {
+                  return cb("Account Address mismatched!");
+                }
+                
                 if (account.secondSignature && !body.secondSecret) {
                   return cb("Invalid second passphrase");
                 }
@@ -3018,6 +3357,10 @@ shared.attachWalletThroughMerchant = function (req, cb) {
               return cb("Account not found");
             }
             
+            if (!account.isMerchant) {
+              return cb("account is not merchant");
+            }
+            
             if(account.countryCode != body.countryCode) {
               return cb("Account country code mismatched!");
             }
@@ -3051,6 +3394,240 @@ shared.attachWalletThroughMerchant = function (req, cb) {
             modules.transactions.receiveTransactions([transaction], cb);
         });
       }
+    }, function (err, transaction) {
+      if (err) {
+        return cb(err.toString());
+      }
+
+      cb(null, { transactionId: transaction[0].id });
+    });
+  });
+}
+
+// Add Merchant transactions
+shared.addMerchantTransactions = function (req, cb) {
+  var body = req.body;
+  library.scheme.validate(body, {
+    type: "object",
+    properties: {
+      secret: {
+        type: "string",
+        minLength: 1,
+        maxLength: 100
+      },
+      amount: {
+        type: "integer",
+        minimum: 1,
+        maximum: constants.totalAmount
+      },
+      recipientId: {
+        type: "string",
+        minLength: 1
+      },
+      publicKey: {
+        type: "string",
+        format: "publicKey"
+      },
+      secondSecret: {
+        type: "string",
+        minLength: 1,
+        maxLength: 100
+      },
+      multisigAccountPublicKey: {
+        type: "string",
+        format: "publicKey"
+      },
+      message: {
+        type: "string",
+        maxLength: 256
+      },
+      senderCountryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
+      },
+      recepientCountryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
+      },
+      payFor: {
+        type: "string",
+        minLength: 1
+      },
+      payForCountryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
+      }
+    },
+    required: ["secret", "amount", "recipientId", "payFor", "senderCountryCode", "recepientCountryCode"]
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message + ': ' + err[0].path);
+    }
+
+    var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
+    var keypair = ed.MakeKeypair(hash);
+
+    if (body.publicKey) {
+      if (keypair.publicKey.toString('hex') != body.publicKey) {
+        return cb("Invalid passphrase");
+      }
+    }
+    var payForConCode = addressHelper.getCountryCodeFromAddress(body.payFor);
+    body.payFor = addressHelper.removeCountryCodeFromAddress(body.payFor);
+
+    var recConCode = addressHelper.getCountryCodeFromAddress(body.recipientId);
+    var recipientId = addressHelper.removeCountryCodeFromAddress(body.recipientId);
+
+    if(body.recepientCountryCode != recConCode) {
+      return cb("recipient country code mismatched!");
+    }
+    if(body.payForCountryCode != payForConCode) {
+      return cb("payFor country code mismatched!");
+    }
+    var query = { address: recipientId };
+
+    library.balancesSequence.add(function (cb) {
+      modules.accounts.getAccount(query, function (err, recipient) {
+        if (err) {
+          return cb(err.toString());
+        }
+      
+        if(!recipient) {
+          return cb("Recipient not found!");
+        }
+        
+        if(recipient.countryCode != body.recepientCountryCode) {
+          return cb("Recipient country code mismatched!");
+        }
+
+        if(!recipient.isVerifier) {
+          return cb("Recipient must be verifier!");
+        }
+
+        if (!recipientId) {
+          return cb("Recipient not found!");
+        }
+
+        if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
+          modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {
+            if (err) {
+              return cb(err.toString());
+            }
+
+            if (!account) {
+              return cb("Multisignature account not found");
+            }
+
+            if (!account.multisignatures || !account.multisignatures) {
+              return cb("Account does not have multisignatures enabled");
+            }
+
+            if (account.multisignatures.indexOf(keypair.publicKey.toString('hex')) < 0) {
+              return cb("Account does not belong to multisignature group");
+            }
+
+            modules.accounts.getAccount({ publicKey: keypair.publicKey }, function (err, requester) {
+              if (err) {
+                return cb(err.toString());
+              }
+
+              if (!requester || !requester.publicKey) {
+                return cb("Invalid requester");
+              }
+
+              if (requester.secondSignature && !body.secondSecret) {
+                return cb("Invalid second passphrase");
+              }
+
+              if (requester.publicKey == account.publicKey) {
+                return cb("Invalid requester");
+              }
+
+              var secondKeypair = null;
+
+              if (requester.secondSignature) {
+                var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
+                secondKeypair = ed.MakeKeypair(secondHash);
+              }
+
+              try {
+                var transaction = library.base.transaction.create({
+                  type: TransactionTypes.MERCHANT_TRS,
+                  amount: body.amount,
+                  sender: account,
+                  payFor: body.payFor,
+                  recipientId: recipientId,
+                  keypair: keypair,
+                  requester: keypair,
+                  secondKeypair: secondKeypair,
+                  message: body.message,
+                  countryCode: body.senderCountryCode,
+                  recepientCountryCode: body.recepientCountryCode,
+                  payForCountryCode: body.payForCountryCode
+                });
+              } catch (e) {
+                return cb(e.toString());
+              }
+              modules.transactions.receiveTransactions([transaction], cb);
+            });
+          });
+        } else {
+          modules.accounts.getAccount({ publicKey: keypair.publicKey.toString('hex') }, function (err, account) {
+            library.logger.debug('=========================== after getAccount ==========================');
+            address = modules.accounts.generateAddressByPublicKey2(keypair.publicKey.toString('hex'));
+            if (err) {
+              return cb(err.toString());
+            }
+            if (!account) {
+              return cb("Account not found");
+            }
+            if (!account.isMerchant) {
+              return cb("account is not merchant");
+            }
+            
+            if(account.countryCode != body.senderCountryCode) {
+              return cb("Account country code mismatched!");
+            }
+
+            if(addressHelper.generateAddressWithCountryCode(account.address, account.countryCode) != addressHelper.generateAddressWithCountryCode(address, body.senderCountryCode)) {
+              return cb("Account Address mismatched!");
+            }
+            
+            if (account.secondSignature && !body.secondSecret) {
+              return cb("Invalid second passphrase");
+            }
+
+            var secondKeypair = null;
+
+            if (account.secondSignature) {
+              var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
+              secondKeypair = ed.MakeKeypair(secondHash);
+            }
+
+            try {
+              var transaction = library.base.transaction.create({
+                type: TransactionTypes.MERCHANT_TRS,
+                amount: body.amount,
+                sender: account,
+                payFor: body.payFor,
+                recipientId: recipientId,
+                keypair: keypair,
+                secondKeypair: secondKeypair,
+                message: body.message,
+                countryCode: body.senderCountryCode,
+                recepientCountryCode: body.recepientCountryCode,
+                payForCountryCode: body.payForCountryCode
+              });
+            } catch (e) {
+              return cb(e.toString());
+            }
+            modules.transactions.receiveTransactions([transaction], cb);
+          });
+        }
+      });
     }, function (err, transaction) {
       if (err) {
         return cb(err.toString());

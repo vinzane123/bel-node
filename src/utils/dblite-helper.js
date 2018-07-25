@@ -23,11 +23,14 @@ module.exports.connect = function (connectString, cb) {
     "CREATE TABLE IF NOT EXISTS peers (id INTEGER NOT NULL PRIMARY KEY, ip INTEGER NOT NULL, port TINYINT NOT NULL, state TINYINT NOT NULL, os VARCHAR(64), version VARCHAR(11), clock INT)",
     "CREATE TABLE IF NOT EXISTS peers_dapp (peerId INT NOT NULL, dappId VARCHAR(20) NOT NULL, FOREIGN KEY(peerId) REFERENCES peers(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS storages(content VARBINARY(4096), transactionId VARCHAR(64) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
-    "CREATE TABLE IF NOT EXISTS ac_status(status VARCHAR(20) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS ac_status(status VARCHAR(20) NOT NULL, expDate VARCHAR(20), transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS ac_countrycode(countryCode VARCHAR(2) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS white_label_wallets(senderId VARCHAR(50) NOT NULL, secondWalletAddress VARCHAR(50) NOT NULL, currency VARCHAR(22) NOT NULL, status VARCHAR(20) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS white_label_merchant_wallets(senderId VARCHAR(50) NOT NULL, attachFrom VARCHAR(50) NOT NULL, attachTo VARCHAR(50) NOT NULL, currency VARCHAR(22) NOT NULL, status VARCHAR(20) NOT NULL, transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
-    
+    "CREATE TABLE IF NOT EXISTS merchant(countryCode varchar(2), payFor VARCHAR(68) NOT NULL, payForCountryCode varchar(2), transactionId VARCHAR(20) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS merchants(merchantName VARCHAR(20) NOT NULL, transactionId VARCHAR(64) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS verifiers(verifierName VARCHAR(20) NOT NULL, transactionId VARCHAR(64) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
+
     // UIA transactions
     "CREATE TABLE IF NOT EXISTS issuers(name VARCHAR(16) NOT NULL PRIMARY KEY, desc VARCHAR(4096) NOT NULL, issuerId VARCHAR(50), transactionId VARCHAR(64) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS assets(name VARCHAR(22) NOT NULL PRIMARY KEY, desc VARCHAR(4096) NOT NULL, maximum VARCHAR(50) NOT NULL, precision TINYINT NOT NULL, strategy TEXT, quantity VARCHAR(50), issuerName VARCHAR(16) NOT NULL, acl TINYINT, writeoff TINYINT, allowWriteoff TINYINT, allowWhitelist TINYINT, allowBlacklist TINYINT, transactionId VARCHAR(64) NOT NULL, FOREIGN KEY(transactionId) REFERENCES trs(id) ON DELETE CASCADE)",

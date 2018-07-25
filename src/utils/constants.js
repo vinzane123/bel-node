@@ -16,8 +16,10 @@ module.exports = {
   confirmationLength: 77,
   fixedPoint : Math.pow(10, 10),
   totalAmount: 2100000000000000000,
+  initialSupply: 174200000000000000,
   maxTxsPerBlock: 500,
   initialAmount: 20000000000,
+  expDateOfKYC: 2, // default exp date of kyc in years
   fees: {
     send: 0.001,
     secondsignature: 0.001,
@@ -36,39 +38,40 @@ module.exports = {
     attachMerchantWallets: {
       BEL: 0,
       NON_BEL: 0
-    }
+    },
+    merchant: 50,
+    verifier: 50
   },
   blockHeightInterval: 2100000,
   milestonesBelPerBlock: [
-	500000000,
-        250000000,
-        125000000,
-        62500000,
-        31250000,
-        15625000,
-        7812500,
-        3906250,
-        1953125,
-        976562.5,
-        488281.3,
-        244140.6,
-        122070.3,
-        61035.2,
-        30517.6,
-        15258.8,
-        7629.4,
-        3814.7,
-        1907.3,
-        953.7,
-        476.8,
-        238.4,
-        119.2,
-        59.6,
-        29.8,
-        14.9,
-        7.5,
-        3.7,
-        1.9,
-        0.9
+    50000000000,  //Initial Reward Year 1
+    25000000000,  //Year 2
+    12500000000,  //Year 3
+    6250000000,   //Year 4
+    3125000000,   //Year 5
+    1562500000,   //Year 6
+    781250000,    //Year 7
+    390625000,    //Year 8
+    195312500,    //Year 9
+    97656250,     //Year 10
+    48828130,     //Year 11
+    24414060,     //Year 12
+    12207030,     //Year 13
+    6103520,      //Year 14
+    3051760,      //Year 15
+    1525880,      //Year 16
+    762940,       //Year 17
+    381470,       //Year 18
+    190730,       //Year 19
+    95370,        //Year 20
+    47680,        //Year 21
+    23840,        //Year 22
+    11920,        //Year 23
+    5960,         //Year 24
+    2980,         //Year 25
+    1490,         //Year 26
+    750,          //Year 27
+    370,          //Year 28
+    190           //Year 29 & next all years
   ]
 }

@@ -486,7 +486,7 @@ Transaction.prototype.apply = function (trs, block, sender, cb) {
   var amount = trs.amount + trs.fee;
 
   if (trs.blockId != genesisblock.block.id && sender.balance < amount) {
-    return setImmediate(cb, "Insufficient balance: " + sender.balance);
+    return setImmediate(cb, "Insufficient balance");
   }
 
   this.scope.account.merge(sender.address, {
@@ -548,7 +548,7 @@ Transaction.prototype.applyUnconfirmed = function (trs, sender, requester, cb) {
   var amount = trs.amount + trs.fee;
 
   if (sender.u_balance < amount && trs.blockId != genesisblock.block.id) {
-    return setImmediate(cb, "Insufficient balance: " + sender.balance);
+    return setImmediate(cb, "Insufficient balance");
   }
 
   library.balanceCache.addNativeBalance(sender.address, -amount)

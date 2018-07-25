@@ -1,7 +1,7 @@
 var constants = require('./constants.js');
 
 function BlockStatus() {
-  var milestones = [
+  /*var milestones = [
 	500000000,
 	250000000,
 	125000000,
@@ -35,7 +35,7 @@ function BlockStatus() {
   ];
 
   var distance = 2100000, // Distance between each milestone
-      rewardOffset = 1; // Start rewards at block (n)
+      rewardOffset = 1;*/ // Start rewards at block (n)
 
   if (global.Config.netVersion === 'mainnet') {
     rewardOffset = 2100000;
@@ -80,7 +80,7 @@ function BlockStatus() {
     var height = parseHeight(height);
     height -= height % 101;
     var milestone = this.calcMilestone(height);
-    var supply    = constants.totalAmount;
+    var supply    = constants.initialSupply;
     var rewards   = [];
 
     if (height <= 0) {

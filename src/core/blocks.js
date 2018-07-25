@@ -13,6 +13,7 @@ var Router = require('../utils/router.js');
 var slots = require('../utils/slots.js');
 var TransactionTypes = require('../utils/transaction-types.js');
 var sandboxHelper = require('../utils/sandbox.js');
+var addressHelper = require('../utils/address.js')
 
 require('array.prototype.findindex'); // Old node fix
 
@@ -96,6 +97,7 @@ private.blocksDataFields = {
   'acls_operator': String,
   'acls_list': String,
   'acs_status': String,
+  'acs_expDate': Number,
   'cc_countryCode': String,
   'acw_status': String,
   'acw_secondWalletAddress': String,
@@ -103,7 +105,12 @@ private.blocksDataFields = {
   'mw_attachFrom': String,
   'mw_attachTo': String,
   'mw_currency': String,
-  'mw_status': String
+  'mw_status': String,
+  'mt_countryCode': String,
+  'mt_payFor': String,
+  'mt_payForCountryCode': String,
+  'mr_merchantName': String,
+  'vr_verifierName': String
 };
 // @formatter:on
 private.loaded = false;
@@ -132,9 +139,13 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "transfers.currency, transfers.amount, " +
   "acls.currency, acls.flag, acls.operator, acls.list, " + 
   "acs.status, " +
+  "acs.expDate, " +
   "cc.countryCode, " +
   "acw.status, acw.secondWalletAddress, acw.currency, " +
-  "mw.attachFrom, mw.attachTo, mw.currency, mw.status " +
+  "mw.attachFrom, mw.attachTo, mw.currency, mw.status, " +
+  "mt.countryCode, mt.payFor, mt.payForCountryCode, " +
+  "mr.merchantName, " +
+  "vr.verifierName " +
   "FROM blocks b " +
   "left outer join trs as t on t.blockId=b.id " +
   "left outer join delegates as d on d.transactionId=t.id " +
@@ -154,7 +165,10 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "left outer join ac_status as acs on acs.transactionId=t.id " +
   "left outer join ac_countrycode as cc on cc.transactionId=t.id " +
   "left outer join white_label_wallets as acw on acw.transactionId=t.id " +
-  "left outer join white_label_merchant_wallets as mw on mw.transactionId=t.id ";
+  "left outer join white_label_merchant_wallets as mw on mw.transactionId=t.id " +
+  "left outer join merchant as mt on mt.transactionId=t.id " +
+  "left outer join merchants as mr on mr.transactionId=t.id " +
+  "left outer join verifiers as vr on vr.transactionId=t.id ";
 
 // Constructor
 function Blocks(cb, scope) {
@@ -703,6 +717,13 @@ Blocks.prototype.loadBlocksOffset = function (limit, offset, verify, cb) {
           if (verify) {
             if (!private.lastBlock || !private.lastBlock.id) {
               // apply genesis block
+              library.miner.minerAddresses.forEach(function(data) {
+                block.transactions.forEach(function(trs) {
+                  if(trs.senderId == addressHelper.removeCountryCodeFromAddress(data.address)) {
+                    trs.countryCode = 'IN' //data.countryCode;
+                  }
+                });
+              });
               self.applyBlock(block, null, false, false, next);
             } else {
               self.verifyBlock(block, null, function (err) {
@@ -929,10 +950,11 @@ Blocks.prototype.applyBlock = function (block, votes, broadcast, saveBlock, call
       }
       return 0;
     });
+    
     async.eachSeries(sortedTrs, function (transaction, nextTr) {
       async.waterfall([
         function (next) {
-          modules.accounts.setAccountAndGet({ publicKey: transaction.senderPublicKey, isGenesis: block.height == 1 }, next);
+          modules.accounts.setAccountAndGet({ publicKey: transaction.senderPublicKey, isGenesis: block.height == 1, countryCode: transaction.countryCode }, next);
         },
         function (sender, next) {
           // if (modules.transactions.hasUnconfirmedTransaction(transaction)) {
@@ -1729,7 +1751,7 @@ shared.getSupply = function (req, cb) {
     return cb("Blockchain is loading")
   }
   var query = req.body, height = private.lastBlock.height;
-  cb(null, { supply: private.blockStatus.calcSupply(height) });
+  cb(null, { totalSupply: constants.totalAmount, currentSupply: private.blockStatus.calcSupply(height) });
 }
 
 shared.getStatus = function (req, cb) {

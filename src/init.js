@@ -362,6 +362,10 @@ module.exports = function(options, done) {
       var json = JSON.parse(fs.readFileSync('./countries.json', 'utf8'));
       cb(null, json);
     },
+    miner: function(cb) {
+      var accountDetail = JSON.parse(fs.readFileSync('./miner.json', 'utf8'));
+      cb(null, accountDetail);
+    },
     oneoff: function (cb) {
       cb(null, new Map)
     },
