@@ -1744,16 +1744,6 @@ private.list = function (filter, cb) {
 
 private.createBasePathes = function (cb) {
   async.series([
-    // function (cb) {
-    //   var iconsPath = path.join(library.config.publicDir, 'images', 'dapps');
-    //   fs.exists(iconsPath, function (exists) {
-    //     if (exists) {
-    //       return setImmediate(cb);
-    //     } else {
-    //       fs.mkdir(iconsPath, cb);
-    //     }
-    //   });
-    // },
     function (cb) {
       fs.exists(private.dappsPath, function (exists) {
         if (exists) {
@@ -1764,6 +1754,12 @@ private.createBasePathes = function (cb) {
       });
     },
     function (cb) {
+      if(!fs.existsSync(path.join(private.appPath, 'public'))) {
+        fs.mkdirSync(path.join(private.appPath, 'public'));
+      }
+      if(!fs.existsSync(path.join(private.appPath, 'public', 'dist'))) {
+        fs.mkdirSync(path.join(private.appPath, 'public', 'dist'));
+      }
       var dappsPublic = path.join(private.appPath, 'public', 'dist', 'dapps');
       fs.exists(dappsPublic, function (exists) {
         if (exists) {
