@@ -3461,7 +3461,7 @@ shared.addMerchantTransactions = function (req, cb) {
         maxLength: 2
       }
     },
-    required: ["secret", "amount", "recipientId", "payFor", "senderCountryCode", "recepientCountryCode"]
+    required: ["secret", "amount", "recipientId", "payFor", "senderCountryCode", "recepientCountryCode", "payForCountryCode"]
   }, function (err) {
     if (err) {
       return cb(err[0].message + ': ' + err[0].path);

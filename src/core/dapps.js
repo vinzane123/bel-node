@@ -365,6 +365,7 @@ function OutTransfer() {
 function InTransfer() {
   this.create = function (data, trs) {
     trs.recipientId = null;
+    trs.countryCode = data.countryCode;
 
     if (data.currency === 'XAS') {
       trs.amount = Number(data.amount)
@@ -379,7 +380,7 @@ function InTransfer() {
         amount: data.amount,
       };
     }
-
+    console.log("create trs: ", trs);
     return trs;
   }
 
@@ -2237,9 +2238,14 @@ private.addTransactions = function (req, cb) {
       multisigAccountPublicKey: {
         type: "string",
         format: "publicKey"
+      },
+      countryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
       }
     },
-    required: ["secret", "amount", "dappId"]
+    required: ["secret", "amount", "dappId", "countryCode"]
   }, function (err) {
     if (err) {
       return cb(err[0].message);
@@ -2307,7 +2313,9 @@ private.addTransactions = function (req, cb) {
                 keypair: keypair,
                 requester: keypair,
                 secondKeypair: secondKeypair,
-                dappId: body.dappId
+                dappId: body.dappId,
+                currency: body.currency,
+                countryCode: body.countryCode
               });
             } catch (e) {
               return cb(e.toString());
@@ -2323,6 +2331,10 @@ private.addTransactions = function (req, cb) {
           }
           if (!account) {
             return cb("Account not found");
+          }
+
+          if(account.countryCode != body.countryCode) {
+            return cb("Account country code mismatched");
           }
 
           if (account.secondSignature && !body.secondSecret) {
@@ -2343,7 +2355,9 @@ private.addTransactions = function (req, cb) {
               sender: account,
               keypair: keypair,
               secondKeypair: secondKeypair,
-              dappId: body.dappId
+              dappId: body.dappId,
+              currency: body.currency,
+              countryCode: body.countryCode
             });
           } catch (e) {
             return cb(e.toString());
