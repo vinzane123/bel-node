@@ -1176,7 +1176,7 @@ function Verifier() {
       return setImmediate(cb, "Invalid transaction amount");
     }
 
-    if (sender.isVerifier) {
+    if (sender.isVerifier && sender.status) {
       return cb("Account is already a verifier");
     }
 
@@ -1215,7 +1215,7 @@ function Verifier() {
         return cb(err);
       }
 
-      if (account) {
+      if (account && account.address != sender.address) {
         return cb("Verifier name already exists");
       }
 
@@ -1244,7 +1244,9 @@ function Verifier() {
     var data = {
       address: sender.address,
       u_isVerifier: 0,
-      isVerifier: 1
+      isVerifier: 1,
+      status: trs.asset.verifier.status,
+      u_status: trs.asset.verifier.status
     }
 
     if (trs.asset.verifier.verifierName) {
@@ -1259,7 +1261,9 @@ function Verifier() {
     var data = {
       address: sender.address,
       u_isVerifier: 1,
-      isVerifier: 0
+      isVerifier: 0,
+      status: trs.asset.verifier.status,
+      u_status: trs.asset.verifier.status
     }
 
     if (trs.asset.verifier.verifierName) {
@@ -1271,7 +1275,7 @@ function Verifier() {
   }
 
   this.applyUnconfirmed = function (trs, sender, cb) {
-    if (sender.isVerifier) {
+    if (sender.isVerifier && sender.status) {
       return cb("Account is already a verifier");
     }
 

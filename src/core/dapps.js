@@ -2208,6 +2208,7 @@ private.stop = function (dapp, cb) {
 }
 
 private.addTransactions = function (req, cb) {
+  console.log("calling addTransactions");
   var body = req.body;
   library.scheme.validate(body, {
     type: "object",
@@ -2543,6 +2544,7 @@ shared.getCommonBlock = function (req, cb) {
 }
 
 shared.sendWithdrawal = function (req, cb) {
+  console.log("calling sendWithdrawal: ", req);
   var body = req.body;
   library.scheme.validate(body, {
     type: "object",

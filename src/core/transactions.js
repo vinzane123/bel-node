@@ -1260,6 +1260,7 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
         } else if(!result.data[addressWithCountryCode]['verifier']) {
           return cb(addressWithCountryCode + ' is not verifier');
         } else  {
+          trs.asset.verifier.status = 1;
 					cb();
 				}
 			} else {
