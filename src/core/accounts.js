@@ -1334,8 +1334,8 @@ function Verifier() {
   this.dbSave = function (trs, cb) {
     library.dbLite.query("INSERT INTO verifiers(verifierName, status, transactionId) VALUES($verifierName, $status, $transactionId)", {
       verifierName: trs.asset.verifier.verifierName,
-      transactionId: trs.id,
-      status: trs.asset.verifier.status
+      status: trs.asset.verifier.status,
+      transactionId: trs.id
     }, cb);
   }
 
