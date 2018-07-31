@@ -188,11 +188,11 @@ function InitialTransfer() {
   }
 
   this.process = function (trs, sender, cb) {
-    var key = sender.address + ':' + trs.type
+    /*var key = sender.address + ':' + trs.type
     if (library.oneoff.has(key)) {
       return setImmediate(cb, 'Double submit')
     }
-    library.oneoff.set(key, true);
+    library.oneoff.set(key, true);*/
     setImmediate(cb, null, trs);
   }
 
@@ -223,8 +223,8 @@ function InitialTransfer() {
         cb(err);
       });
     });
-    var key = sender.address + ':' + trs.type
-    library.oneoff.delete(key);
+    /*var key = sender.address + ':' + trs.type
+    library.oneoff.delete(key);*/
   }
 
   this.undo = function (trs, block, sender, cb) {
@@ -348,11 +348,11 @@ function MerchantTransfer () {
 	};
 
 	this.process = function (trs, sender, cb) {
-    var key = sender.address + ':' + trs.type;
+    /*var key = sender.address + ':' + trs.type;
     if (library.oneoff.has(key)) {
       return setImmediate(cb, 'Double submit');
     }
-    library.oneoff.set(key, true);
+    library.oneoff.set(key, true);*/
     
     modules.accounts.getAccount({address: trs.payFor}, function(err, account) {
       if(err) {
@@ -393,8 +393,8 @@ function MerchantTransfer () {
         cb(err);
       });
     });
-    var key = sender.address + ':' + trs.type
-    library.oneoff.delete(key);
+    /*var key = sender.address + ':' + trs.type
+    library.oneoff.delete(key);*/
 	};
 
 	this.undo = function (trs, block, sender, cb) {
