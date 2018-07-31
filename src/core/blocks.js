@@ -110,7 +110,8 @@ private.blocksDataFields = {
   'mt_payFor': String,
   'mt_payForCountryCode': String,
   'mr_merchantName': String,
-  'vr_verifierName': String
+  'vr_verifierName': String,
+  'vr_status': String
 };
 // @formatter:on
 private.loaded = false;
@@ -145,7 +146,8 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "mw.attachFrom, mw.attachTo, mw.currency, mw.status, " +
   "mt.countryCode, mt.payFor, mt.payForCountryCode, " +
   "mr.merchantName, " +
-  "vr.verifierName " +
+  "vr.verifierName, " +
+  "vr.status " +
   "FROM blocks b " +
   "left outer join trs as t on t.blockId=b.id " +
   "left outer join delegates as d on d.transactionId=t.id " +
