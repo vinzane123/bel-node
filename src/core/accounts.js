@@ -1323,7 +1323,8 @@ function Verifier() {
       var verifier = {
         verifierName: raw.vr_verifierName,
         publicKey: raw.t_senderPublicKey,
-        address: raw.t_senderId
+        address: raw.t_senderId,
+        status: raw.vr_status
       }
 
       return {verifier: verifier};
@@ -1331,9 +1332,10 @@ function Verifier() {
   }
 
   this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO verifiers(verifierName, transactionId) VALUES($verifierName, $transactionId)", {
+    library.dbLite.query("INSERT INTO verifiers(verifierName, status, transactionId) VALUES($verifierName, $status, $transactionId)", {
       verifierName: trs.asset.verifier.verifierName,
-      transactionId: trs.id
+      transactionId: trs.id,
+      status: trs.asset.verifier.status
     }, cb);
   }
 
