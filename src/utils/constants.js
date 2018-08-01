@@ -20,6 +20,7 @@ module.exports = {
   maxTxsPerBlock: 500,
   initialAmount: 20000000000,
   expDateOfKYC: 2, // default exp date of kyc in years
+  defaultCurrency: 'BEL',
   fees: {
     send: 0.001,
     secondsignature: 0.001,

@@ -406,11 +406,11 @@ function DisableAcstatus () {
 	};
 
 	this.process = function (trs, sender, cb) {
-    var key = sender.address + ':' + trs.type;
+    /*var key = sender.address + ':' + trs.type;
     if (library.oneoff.has(key)) {
       return setImmediate(cb, 'Double submit');
     }
-    library.oneoff.set(key, true);
+    library.oneoff.set(key, true);*/
     
 		return setImmediate(cb, null, trs);
 	};
@@ -436,8 +436,8 @@ function DisableAcstatus () {
 			status: trs.asset.ac_status.status
 		};
 
-    var key = sender.address + ':' + trs.type;
-    library.oneoff.delete(key);
+    /*var key = sender.address + ':' + trs.type;
+    library.oneoff.delete(key);*/
 
 		modules.accounts.setAccountAndGet(data, cb);
 	};
@@ -807,7 +807,7 @@ function AttachMerchantWallets () {
       if(account.status != 1) {
         return cb(address.concat((account.countryCode)? account.countryCode: trs.countryCode) + ' wallet not verified');
       }
-      var key = sender.address + ':' + trs.type;
+      var key = trs.asset.ac_wallets.attachTo + ':' + trs.type;
       if (library.oneoff.has(key)) {
         return setImmediate(cb, 'Double submit');
       }
@@ -832,7 +832,7 @@ function AttachMerchantWallets () {
 	};
 
 	this.apply = function (trs, block, sender, cb) {
-    var key = sender.address + ':' + trs.type;
+    var key = trs.asset.ac_wallets.attachTo + ':' + trs.type;
     library.oneoff.delete(key);
 
     setImmediate(cb);
