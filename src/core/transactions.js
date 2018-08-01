@@ -1275,6 +1275,9 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 				cb();
 			}
 		});
+  } else if(trs.type == TransactionTypes.OUT_TRANSFER) {
+    library.logger.info("PASS OutTransfer TransactionTypes");
+    cb();
   } else if(!recipientId && sender.status == 1 && sender.expDate >= new Date().getTime()) {
 		cb();
 	} else if((sender.status != 1) || sender.expDate < new Date().getTime()){

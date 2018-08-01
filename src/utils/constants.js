@@ -27,8 +27,8 @@ module.exports = {
     vote: 1,
     multisignature: 1,
     dapp: 50,
-    inTransfer: 5,
-    outTransfer: 5,
+    inTransfer: 0.001,
+    outTransfer: 0.001,
     account: 0,
     disableAccount: 0,
     attachWallets: {
