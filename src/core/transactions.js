@@ -1167,25 +1167,13 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
 };
 
 private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
-  console.log("trs: ", trs)
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
   
 	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC || trs.type === TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT) {
     var addressWithCountryCode = (recipientId)? recipientId.concat(trs.asset.ac_status.countryCode): (sender.address.concat((sender && sender.countryCode)? sender.countryCode: ''));
-    console.log("addressWithCountryCode: ", addressWithCountryCode);
     httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
-      result = { 
-        data: { 
-          A4q6RGhAzKBBRHQg1X7NqXmrekrEe4YRZ7US: true 
-        },
-        fielderror: null,
-        message: 'User\'s status validated successfully.',
-        isSuccess: true,
-        status: 'OK',
-        timestamp: 1533274346561 
-      };
       if(!error && result){
         if(!result.data[addressWithCountryCode]) {
           return cb(addressWithCountryCode + ' wallet is not verified.');
@@ -1248,14 +1236,6 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
     httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
-      result = { 
-        "data": { "7319110840628963020IN": "{\"merchant\":true,\"7319110840628963020IN\":true}" },
-        "fielderror": null,
-        "message": "User's status validated successfully.",
-        "isSuccess": true,
-        "status": "OK",
-        "timestamp": 1533216498068 
-      };
       result.data[addressWithCountryCode] = JSON.parse(result.data[addressWithCountryCode]);
       if(!error && result && result.data){
         if(!result.data[addressWithCountryCode][addressWithCountryCode]) {

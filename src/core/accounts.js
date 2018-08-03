@@ -1477,7 +1477,6 @@ function EnableKYCByMerchant () {
 	};
 
 	this.dbSave = function (trs, cb) {
-    console.log("dbSave trs: ", trs);
     library.dbLite.query("INSERT INTO ac_status(status, expDate, transactionId) VALUES($status, $expDate, $transactionId)", {
       status: trs.asset.ac_status.status,
       expDate: trs.asset.ac_status.expDate,
