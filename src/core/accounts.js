@@ -743,6 +743,7 @@ function AttachWallets () {
     }
   }
 }
+
 //Attach wallet through merchant
 function AttachMerchantWallets () {
 	this.create = function (data, trs) {
@@ -1351,6 +1352,186 @@ function Verifier() {
   }
 }
 
+// Enable kyc wallet by merchants
+function EnableKYCByMerchant () {
+	this.create = function (data, trs) {
+    trs.recipientId = data.recipientId;
+    trs.countryCode = data.countryCode;
+		trs.asset.ac_status = {
+      countryCode: data.recepientCountryCode,
+      status: 1,
+      expDate: data.expDate,
+			publicKey: data.sender.publicKey
+		};
+		return trs;
+	};
+
+	this.calculateFee = function (trs, sender) {
+    return constants.fees.enableKYCByMerchant * constants.fixedPoint;
+	};
+
+	this.verify = function (trs, sender, cb) {
+
+    if(!sender.isMerchant) {
+      return cb("account is not merchant");
+    }
+
+    if (trs.recipientId == sender.address) {
+      return cb("Invalid recipientId, cannot be your self");
+    }
+
+    if (!global.featureSwitch.enableMoreLockTypes) {
+      var lastBlock = modules.blocks.getLastBlock()
+      if (sender.lockHeight && lastBlock && lastBlock.height + 1 <= sender.lockHeight) {
+        return cb('Account is locked')
+      }
+    }
+
+    modules.accounts.getAccount({address: trs.recipientId}, function(err, recipient) {
+      if(err) {
+        return cb(err);
+      }
+      if(recipient && recipient.status) {
+        return cb("User KYC is already enabled on blockchain!");
+      }
+      cb(null, trs);
+    });
+	};
+
+	this.process = function (trs, sender, cb) {
+    /*var key = sender.address + ':' + trs.type;
+    if (library.oneoff.has(key)) {
+      return setImmediate(cb, 'Double submit');
+    }
+    library.oneoff.set(key, true);*/
+    
+    return setImmediate(cb, null, trs);
+	};
+
+	this.getBytes = function (trs) {
+		if (!trs.asset.ac_status.status) {
+			return null;
+		}
+	
+		try {
+      var buf = new Buffer(trs.asset.ac_status.status);
+      buf.writeUInt8(0x3, 0);
+		} catch (e) {
+			throw e;
+    }
+    return buf;
+	};
+
+	this.apply = function (trs, block, sender, cb) {
+    var recepientCountryCode = (trs.asset && trs.asset.ac_status && trs.asset.ac_status.countryCode)? trs.asset.ac_status.countryCode: '';
+    var data = { 
+      address: trs.recipientId,
+      status: trs.asset.ac_status.status,
+      u_status: trs.asset.ac_status.status, 
+      countryCode: recepientCountryCode 
+    }
+    modules.accounts.setAccountAndGet(data, cb);
+
+    /*var key = sender.address + ':' + trs.type
+    library.oneoff.delete(key);*/
+	};
+
+	this.undo = function (trs, block, sender, cb) {
+    var recepientCountryCode = (trs.asset && trs.asset.ac_status && trs.asset.ac_status.countryCode)? trs.asset.ac_status.countryCode: '';    
+    var data = { 
+      address: trs.recipientId,
+      status: trs.asset.ac_status.status,
+      u_status: trs.asset.ac_status.status, 
+      countryCode: recepientCountryCode 
+    }
+    modules.accounts.setAccountAndGet(data, cb);
+	};
+
+	this.applyUnconfirmed = function (trs, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.undoUnconfirmed = function (trs, sender, cb) {
+    setImmediate(cb);
+	};
+
+	this.objectNormalize = function (trs) {
+    delete trs.blockId;
+    return trs;
+	};
+
+	this.dbRead = function (raw) {
+		if (!raw.acs_status) {
+			return null;
+		} else {
+			var ac_status = {
+				status: raw.acs_status,
+				publicKey: raw.t_senderPublicKey,
+        address: raw.t_senderId,
+        countryCode: raw.cc_countryCode,
+        expDate: raw.acs_expDate
+			};
+	
+			return {ac_status: ac_status};
+		}
+	};
+
+	this.dbSave = function (trs, cb) {
+    console.log("dbSave trs: ", trs);
+    library.dbLite.query("INSERT INTO ac_status(status, expDate, transactionId) VALUES($status, $expDate, $transactionId)", {
+      status: trs.asset.ac_status.status,
+      expDate: trs.asset.ac_status.expDate,
+      transactionId: trs.id
+    }, function(err) {
+      library.dbLite.query("INSERT INTO ac_countrycode(countryCode, transactionId) VALUES($countryCode, $transactionId)", {
+        countryCode: trs.asset.ac_status.countryCode,
+        transactionId: trs.id
+      }, function(err) {
+        library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE accountId=$accountId", {
+          status: trs.asset.ac_status.status,
+          accountId: trs.recipientId
+        }, function(err) {
+          var queryString = "SELECT secondWalletAddress, status, currency " + 
+          "FROM mem_accounts_attach_wallets " +
+          "WHERE " +
+          "accountId= '"+trs.recipientId+"'";
+
+          var fields = ['address','status', 'currency'];
+          var params = {};
+
+          library.dbLite.query(queryString, params, fields, function(err, rows) {
+            async.eachSeries(rows, function (row, cb) {
+              if(row.currency == 'BEL') {
+                modules.accounts.setAccountAndGet({ 
+                  address: row.address,
+                  countryCode: trs.countryCode,
+                  status: row.status,
+                  u_status: row.status,
+                  expDate: trs.asset.ac_status.expDate 
+                }, function (err, res) {
+                  cb();
+                });
+              } else {
+                cb();
+              }  
+            }, cb);
+          });
+        });
+      });
+    });
+  };
+
+  this.ready = function (trs, sender) {
+    if (sender.multisignatures.length) {
+      if (!trs.signatures) {
+        return false;
+      }
+      return trs.signatures.length >= sender.multimin - 1;
+    } else {
+      return true;
+    }
+  }
+}
 // Constructor
 function Accounts(cb, scope) {
   library = scope;
@@ -1365,6 +1546,7 @@ function Accounts(cb, scope) {
   library.base.transaction.attachAssetType(TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS, new AttachMerchantWallets());
   library.base.transaction.attachAssetType(TransactionTypes.MERCHANT, new Merchant());
   library.base.transaction.attachAssetType(TransactionTypes.VERIFIER, new Verifier());
+  library.base.transaction.attachAssetType(TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT, new EnableKYCByMerchant());
   
   setImmediate(cb, null, self);
 }
@@ -1395,7 +1577,8 @@ private.attachApi = function () {
     "get /merchants/get": "getMerchant",
     "put /verifier": "addVerifier",
     "get /verifiers": "getVerifiers",
-    "get /verifiers/get": "getVerifier"
+    "get /verifiers/get": "getVerifier",
+    "put /merchants/enable/kyc": "enableKYCByMerchant"
   });
 
   if (process.env.DEBUG && process.env.DEBUG.toUpperCase() == "TRUE") {
@@ -2691,6 +2874,220 @@ shared.getAccount = function (req, cb) {
         },
         version: modules.peer.getVersion()
       });
+    });
+  });
+}
+
+// Add Merchant transactions
+shared.enableKYCByMerchant = function (req, cb) {
+  var body = req.body;
+  library.scheme.validate(body, {
+    type: "object",
+    properties: {
+      secret: {
+        type: "string",
+        minLength: 1,
+        maxLength: 100
+      },
+      recipientId: {
+        type: "string",
+        minLength: 1
+      },
+      publicKey: {
+        type: "string",
+        format: "publicKey"
+      },
+      secondSecret: {
+        type: "string",
+        minLength: 1,
+        maxLength: 100
+      },
+      multisigAccountPublicKey: {
+        type: "string",
+        format: "publicKey"
+      },
+      message: {
+        type: "string",
+        maxLength: 256
+      },
+      senderCountryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
+      },
+      recepientCountryCode: {
+        type: "string",
+        minLength: 2,
+        maxLength: 2
+      }
+    },
+    required: ["secret", "recipientId", "senderCountryCode", "recepientCountryCode"]
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message + ': ' + err[0].path);
+    }
+
+    var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
+    var keypair = ed.MakeKeypair(hash);
+
+    if (body.publicKey) {
+      if (keypair.publicKey.toString('hex') != body.publicKey) {
+        return cb("Invalid passphrase");
+      }
+    }
+    
+    if(!body.expDate) {
+      body.expDate = new Date(new Date().setFullYear(new Date().getFullYear() + constants.expDateOfKYC)).getTime();
+    }
+    
+    if(isNaN(body.expDate.valueOf())) {
+      return cb('Invalid date formate');
+    }
+
+    if(body.expDate < new Date().getTime()) {
+      return cb('Invalid date, expiry date should be greater than today date');
+    }
+
+    var recConCode = addressHelper.getCountryCodeFromAddress(body.recipientId);
+    var recipientId = addressHelper.removeCountryCodeFromAddress(body.recipientId);
+
+    if(body.recepientCountryCode != recConCode) {
+      return cb("recipient country code mismatched!");
+    }
+    
+    var query = { address: recipientId };
+
+    library.balancesSequence.add(function (cb) {
+      modules.accounts.getAccount(query, function (err, recipient) {
+        if (err) {
+          return cb(err.toString());
+        }
+
+        if(recipient && recipient.status) {
+          return cb("User KYC is already enabled on blockchain!");
+        }
+
+        if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
+          modules.accounts.getAccount({ publicKey: body.multisigAccountPublicKey }, function (err, account) {
+            if (err) {
+              return cb(err.toString());
+            }
+
+            if (!account) {
+              return cb("Multisignature account not found");
+            }
+
+            if (!account.multisignatures || !account.multisignatures) {
+              return cb("Account does not have multisignatures enabled");
+            }
+
+            if (account.multisignatures.indexOf(keypair.publicKey.toString('hex')) < 0) {
+              return cb("Account does not belong to multisignature group");
+            }
+
+            modules.accounts.getAccount({ publicKey: keypair.publicKey }, function (err, requester) {
+              if (err) {
+                return cb(err.toString());
+              }
+
+              if (!requester || !requester.publicKey) {
+                return cb("Invalid requester");
+              }
+
+              if (requester.secondSignature && !body.secondSecret) {
+                return cb("Invalid second passphrase");
+              }
+
+              if (requester.publicKey == account.publicKey) {
+                return cb("Invalid requester");
+              }
+
+              var secondKeypair = null;
+
+              if (requester.secondSignature) {
+                var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
+                secondKeypair = ed.MakeKeypair(secondHash);
+              }
+
+              try {
+                var transaction = library.base.transaction.create({
+                  type: TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT,
+                  amount: body.amount,
+                  sender: account,
+                  recipientId: recipientId,
+                  keypair: keypair,
+                  requester: keypair,
+                  secondKeypair: secondKeypair,
+                  message: body.message,
+                  expDate: body.expDate,
+                  countryCode: body.senderCountryCode,
+                  recepientCountryCode: body.recepientCountryCode
+                });
+              } catch (e) {
+                return cb(e.toString());
+              }
+              modules.transactions.receiveTransactions([transaction], cb);
+            });
+          });
+        } else {
+          modules.accounts.getAccount({ publicKey: keypair.publicKey.toString('hex') }, function (err, account) {
+            library.logger.debug('=========================== after getAccount ==========================');
+            address = modules.accounts.generateAddressByPublicKey2(keypair.publicKey.toString('hex'));
+            if (err) {
+              return cb(err.toString());
+            }
+            if (!account) {
+              return cb("Account not found");
+            }
+            if (!account.isMerchant) {
+              return cb("account is not merchant");
+            }
+            
+            if(account.countryCode != body.senderCountryCode) {
+              return cb("Account country code mismatched!");
+            }
+
+            if(addressHelper.generateAddressWithCountryCode(account.address, account.countryCode) != addressHelper.generateAddressWithCountryCode(address, body.senderCountryCode)) {
+              return cb("Account Address mismatched!");
+            }
+            
+            if (account.secondSignature && !body.secondSecret) {
+              return cb("Invalid second passphrase");
+            }
+
+            var secondKeypair = null;
+
+            if (account.secondSignature) {
+              var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
+              secondKeypair = ed.MakeKeypair(secondHash);
+            }
+
+            try {
+              var transaction = library.base.transaction.create({
+                type: TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT,
+                amount: body.amount,
+                sender: account,
+                recipientId: recipientId,
+                keypair: keypair,
+                secondKeypair: secondKeypair,
+                message: body.message,
+                expDate: body.expDate,
+                countryCode: body.senderCountryCode,
+                recepientCountryCode: body.recepientCountryCode,
+              });
+            } catch (e) {
+              return cb(e.toString());
+            }
+            modules.transactions.receiveTransactions([transaction], cb);
+          });
+        }
+      });
+    }, function (err, transaction) {
+      if (err) {
+        return cb(err.toString());
+      }
+
+      cb(null, { transactionId: transaction[0].id });
     });
   });
 }

@@ -392,9 +392,9 @@ Transaction.prototype.verify = function (trs, sender, requester, cb) { //inherit
   }
 
   // Calc fee
-  var fee = private.types[trs.type].calculateFee.call(private.types[trs.type], trs, sender) || false;
+  var fee = private.types[trs.type].calculateFee.call(private.types[trs.type], trs, sender) || 0;
   
-  if ((!fee || trs.fee != fee) && trs.type !== TransactionTypes.ENABLE_WALLET_KYC && trs.type !== TransactionTypes.DISABLE_WALLET_KYC && trs.type !== TransactionTypes.WHITELIST_WALLET_TRS && trs.type !== TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS) {
+  if ((!fee || trs.fee != fee) && trs.type !== TransactionTypes.ENABLE_WALLET_KYC && trs.type !== TransactionTypes.DISABLE_WALLET_KYC && trs.type !== TransactionTypes.WHITELIST_WALLET_TRS && trs.type !== TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS && trs.type !== TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT) {
     return setImmediate(cb, "Invalid transaction type/fee: " + trs.id);
   }
   // Check amount
