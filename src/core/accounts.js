@@ -610,7 +610,7 @@ function AttachWallets () {
 	};
 
 	this.process = function (trs, sender, cb) {
-    var key = sender.address + ':' + trs.type;
+    var key = trs.asset.ac_wallets.secondWalletAddress + ':' + trs.type;
     if (library.oneoff.has(key)) {
       return setImmediate(cb, 'Double submit');
     }
@@ -634,7 +634,7 @@ function AttachWallets () {
 	};
 
 	this.apply = function (trs, block, sender, cb) {
-    var key = sender.address + ':' + trs.type;
+    var key = trs.asset.ac_wallets.secondWalletAddress + ':' + trs.type;
     library.oneoff.delete(key);
 
     setImmediate(cb);
