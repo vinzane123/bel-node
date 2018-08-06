@@ -1570,6 +1570,7 @@ private.attachApi = function () {
     "get /delegates/fee": "getDelegatesFee",
     "put /delegates": "addDelegates",
     "get /": "getAccount",
+    "get /info": "getAccounts",
     "get /new": "newAccount",
     "put /merchant": "addMerchant",
     "get /merchants": "getMerchants",
@@ -2874,6 +2875,21 @@ shared.getAccount = function (req, cb) {
         version: modules.peer.getVersion()
       });
     });
+  });
+}
+
+shared.getAccounts = function (req, cb) {
+  if(typeof req.body.address == 'string') {
+    req.body.address = req.body.address.split(',');
+  }
+  modules.accounts.getAccounts({
+    address: {$in: req.body.address}
+  }, ['address', "countryCode", "status"], function (err, rows) {
+    if (err) {
+      return cb("Database error");
+    }
+  
+    cb(null, { info: rows });
   });
 }
 
