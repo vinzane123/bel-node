@@ -1170,9 +1170,9 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
   
-	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC) {
-    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
-		httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC || trs.type === TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT) {
+    var addressWithCountryCode = (recipientId)? recipientId.concat(trs.asset.ac_status.countryCode): (sender.address.concat((sender && sender.countryCode)? sender.countryCode: ''));
+    httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
       if(!error && result){
         if(!result.data[addressWithCountryCode]) {
@@ -1275,6 +1275,9 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 				cb();
 			}
 		});
+  } else if(trs.type == TransactionTypes.OUT_TRANSFER) {
+    library.logger.info("PASS OutTransfer TransactionTypes");
+    cb();
   } else if(!recipientId && sender.status == 1 && sender.expDate >= new Date().getTime()) {
 		cb();
 	} else if((sender.status != 1) || sender.expDate < new Date().getTime()){

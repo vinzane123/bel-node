@@ -20,6 +20,7 @@ module.exports = {
   maxTxsPerBlock: 500,
   initialAmount: 20000000000,
   expDateOfKYC: 2, // default exp date of kyc in years
+  defaultCurrency: 'BEL', // default currency symbole for Belrium
   fees: {
     send: 0.001,
     secondsignature: 0.001,
@@ -27,8 +28,8 @@ module.exports = {
     vote: 1,
     multisignature: 1,
     dapp: 50,
-    inTransfer: 5,
-    outTransfer: 5,
+    inTransfer: 0.001,
+    outTransfer: 0.001,
     account: 0,
     disableAccount: 0,
     attachWallets: {
@@ -40,7 +41,8 @@ module.exports = {
       NON_BEL: 0
     },
     merchant: 50,
-    verifier: 50
+    verifier: 50,
+    enableKYCByMerchant: 0
   },
   blockHeightInterval: 2100000,
   milestonesBelPerBlock: [
