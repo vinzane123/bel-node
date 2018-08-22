@@ -830,6 +830,9 @@ function AttachMerchantWallets () {
       if(!account) {
         return cb(address.concat(trs.countryCode) + ' wallet not exists');
       }
+      if(account.countryCode != trs.asset.ac_wallets.attachFromCountryCode) {
+        return cb("attachFromCountryCode mismatched!");
+      }
       if(account.status != 1) {
         return cb(address.concat((account.countryCode)? account.countryCode: trs.attachFromCountryCode) + ' wallet not verified');
       }
