@@ -1171,7 +1171,7 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
   
 	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC || trs.type === TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT) {
     var addressWithCountryCode = (recipientId)? recipientId.concat(trs.asset.ac_status.countryCode): (sender.address.concat((sender && sender.countryCode)? sender.countryCode: ''));
-    httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
+    /*httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
       if(!error && result){
         if(!result.data[addressWithCountryCode]) {
@@ -1185,8 +1185,8 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 			} else {
 				cb('Something went wrong.');
 			}
-		});
-		//cb();
+		});*/
+		cb();
 	} else if(trs.type === TransactionTypes.DISABLE_WALLET_KYC) {
     var addresses = [];
     var payload = [];
@@ -1235,14 +1235,14 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
     var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
     httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
-      /*result = { 
+      result = { 
         data: { '9360959343898659339IN': '{"9360959343898659339IN":true,"merchant":true}' },
         fielderror: null,
         message: 'User\'s status validated successfully.',
         isSuccess: true,
         status: 'OK',
         timestamp: 1534922190754 
-      };*/
+      };
       result.data[addressWithCountryCode] = JSON.parse(result.data[addressWithCountryCode]);
       if(!error && result && result.data){
         if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
