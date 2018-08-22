@@ -2727,7 +2727,7 @@ shared.attachWallets = function (req, cb) {
     }
     if(body.currencyType == 'BEL') {
       async.eachSeries(body.whiteList, function (list, cb) {
-        if(!addressHelper.isBase58CheckAddress(list.address.slice(0, -2))) {
+        if(!addressHelper.isAddress(list.address.slice(0, -2))) {
           return cb("Wrong address found: " + list.address);
         }
         if(body.countryCode != addressHelper.getCountryCodeFromAddress(list.address)) {
@@ -3271,7 +3271,7 @@ shared.attachWalletThroughMerchant = function (req, cb) {
     }
     if(body.currencyType == 'BEL') {
       async.eachSeries(body.attachTo, function (list, cb) {
-        if(!addressHelper.isBase58CheckAddress(list.address.slice(0, -2))) {
+        if(!addressHelper.isAddress(list.address.slice(0, -2))) {
           return cb("Wrong address found: " + list.address);
         }
         if(body.attachFromCountryCode != addressHelper.getCountryCodeFromAddress(list.address)) {

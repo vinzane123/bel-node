@@ -590,7 +590,7 @@ function AttachWallets () {
 
     if(trs.asset.ac_wallets.currencyType == 'BEL') {
       async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
-        if(!addressHelper.isBase58CheckAddress(list.address)) {
+        if(!addressHelper.isAddress(list.address)) {
           return cb("Wrong address found: " + list.address);
         }
         list.currency = list.currency.toUpperCase();
@@ -792,7 +792,7 @@ function AttachMerchantWallets () {
     if(trs.asset.ac_wallets.currencyType === 'BEL') {
     
       async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
-        if(!addressHelper.isBase58CheckAddress(list.address)) {
+        if(!addressHelper.isAddress(list.address)) {
           return cb("Wrong address found: " + list.address);
         }
         list.currency = list.currency.toUpperCase();
