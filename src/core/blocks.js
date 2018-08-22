@@ -101,11 +101,12 @@ private.blocksDataFields = {
   'cc_countryCode': String,
   'acw_status': String,
   'acw_secondWalletAddress': String,
-  'acw_currency': String,
+  'acw_currencyType': String,
   'mw_attachFrom': String,
   'mw_attachTo': String,
-  'mw_currency': String,
+  'mw_currencyType': String,
   'mw_status': String,
+  'mw_attachFromCountryCode': String,
   'mt_countryCode': String,
   'mt_payFor': String,
   'mt_payForCountryCode': String,
@@ -142,8 +143,8 @@ const FULL_BLOCK_QUERY = "SELECT " +
   "acs.status, " +
   "acs.expDate, " +
   "cc.countryCode, " +
-  "acw.status, acw.secondWalletAddress, acw.currency, " +
-  "mw.attachFrom, mw.attachTo, mw.currency, mw.status, " +
+  "acw.status, acw.secondWalletAddress, acw.currencyType, " +
+  "mw.attachFrom, mw.attachTo, mw.currencyType, mw.status, mw.attachFromCountryCode, " +
   "mt.countryCode, mt.payFor, mt.payForCountryCode, " +
   "mr.merchantName, " +
   "vr.verifierName, " +
