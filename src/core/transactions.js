@@ -108,10 +108,21 @@ function Transfer() {
   }
 
   this.applyUnconfirmed = function (trs, sender, cb) {
-    setImmediate(cb);
+    modules.accounts.getAccount({address: trs.recipientId}, function(err, account) {
+      if(!account) {
+        var idKey = sender.address + ':' + trs.type
+        if (library.oneoff.has(idKey)) {
+          return setImmediate(cb, 'Double submit')
+        }
+        library.oneoff.set(idKey, true)
+      }
+      setImmediate(cb);
+    });
   }
 
   this.undoUnconfirmed = function (trs, sender, cb) {
+    var idKey = sender.address + ':' + trs.type;
+    library.oneoff.delete(idKey);
     setImmediate(cb);
   }
 
@@ -188,11 +199,6 @@ function InitialTransfer() {
   }
 
   this.process = function (trs, sender, cb) {
-    /*var key = sender.address + ':' + trs.type
-    if (library.oneoff.has(key)) {
-      return setImmediate(cb, 'Double submit')
-    }
-    library.oneoff.set(key, true);*/
     setImmediate(cb, null, trs);
   }
 
@@ -223,8 +229,6 @@ function InitialTransfer() {
         cb(err);
       });
     });
-    /*var key = sender.address + ':' + trs.type
-    library.oneoff.delete(key);*/
   }
 
   this.undo = function (trs, block, sender, cb) {
@@ -247,10 +251,21 @@ function InitialTransfer() {
   }
 
   this.applyUnconfirmed = function (trs, sender, cb) {
-    setImmediate(cb);
+    modules.accounts.getAccount({address: trs.recipientId}, function(err, account) {
+      if(!account) {
+        var idKey = sender.address + ':' + trs.type
+        if (library.oneoff.has(idKey)) {
+          return setImmediate(cb, 'Double submit')
+        }
+        library.oneoff.set(idKey, true)
+      }
+      setImmediate(cb);
+    });
   }
 
   this.undoUnconfirmed = function (trs, sender, cb) {
+    var idKey = sender.address + ':' + trs.type;
+    library.oneoff.delete(idKey);
     setImmediate(cb);
   }
 
@@ -3700,7 +3715,6 @@ shared.getAttachedWallets = function (req, cb) {
       if(!rows.length) {
         return cb('Invalid address or currency');
       }
-      console.log("rows: ", rows);
       var info = [];
 
       async.eachSeries(rows, function (row, cb) {
@@ -3708,7 +3722,6 @@ shared.getAttachedWallets = function (req, cb) {
           modules.accounts.getAccount({ 
             address: row.address 
           }, function (err, res) {
-            console.log("res: ", res)
             info.push({address: row.address.concat(res.countryCode), currency: row.currency, status: row.status});
             cb();
           });
