@@ -564,14 +564,14 @@ function AttachWallets () {
 		trs.asset.ac_wallets = {
       publicKey: data.sender.publicKey,
       status: data.sender.status,
-      secondWalletAddress: data.secondWalletAddress,
-      currency: data.currency
-		};
+      whiteList: data.whiteList,
+      currencyType: data.currencyType
+    };
 		return trs;
 	};
 
 	this.calculateFee = function (trs, sender) {
-    if(trs.asset.ac_wallets.currency == 'BEL') {
+    if(trs.asset.ac_wallets.currencyType == 'BEL') {
       return constants.fees.attachWallets.BEL * constants.fixedPoint;
     } else {
       return constants.fees.attachWallets.NON_BEL * constants.fixedPoint;
@@ -588,35 +588,68 @@ function AttachWallets () {
 			return setImmediate(cb, 'Invalid transaction asset');
     }
 
-    var queryString = "SELECT secondWalletAddress, status, currency " + 
-    "FROM mem_accounts_attach_wallets acw " +
-    "WHERE " +
-    "secondWalletAddress= '"+trs.asset.ac_wallets.secondWalletAddress+"'";
-
-    var fields = ['address','status', 'currency'];
-    var params = {};
-
-    library.dbLite.query(queryString, params, fields, function(err, row) {
-      if(row && row[0] && row[0].status == 1) {
-        if(row[0].currency == 'BEL') {
-          return setImmediate(cb, trs.asset.ac_wallets.secondWalletAddress + trs.countryCode + ' wallet already attached');
-        } else {
-          return setImmediate(cb, trs.asset.ac_wallets.secondWalletAddress + ' wallet already attached');
+    if(trs.asset.ac_wallets.currencyType == 'BEL') {
+      async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+        if(!addressHelper.isAddress(list.address)) {
+          return cb("Wrong address found: " + list.address);
         }
-      } else {
-        cb(null, trs);
-      }
-    });
+        list.currency = list.currency.toUpperCase();
+        if(list.currency != 'BEL') {
+          return cb("you can attach only BEL wallet");
+        }
+        cb();
+      }, function (err) {
+        if(err) {
+          return cb(err);
+        }
+        cb();
+      });
+    } else if(trs.asset.ac_wallets.currencyType == 'NON-BEL') {
+      async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+        list.currency = list.currency.toUpperCase();
+        if(list.currency == 'BEL') {
+          return cb("you can attach only NON-BEL wallet");
+        }
+        cb();
+      }, function (err) {
+        if(err) {
+          return cb(err);
+        }
+        cb();
+      });
+    } else {
+      return cb("currencyType must be BEL or NON-BEL");
+    }
 	};
 
 	this.process = function (trs, sender, cb) {
-    var key = trs.asset.ac_wallets.secondWalletAddress + ':' + trs.type;
-    if (library.oneoff.has(key)) {
-      return setImmediate(cb, 'Double submit');
-    }
-    library.oneoff.set(key, true);
-    
-		return setImmediate(cb, null, trs);
+    async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+      list.currency = list.currency.toUpperCase();
+        var queryString = "SELECT secondWalletAddress, status, currency " + 
+        "FROM mem_accounts_attach_wallets acw " +
+        "WHERE " +
+        "secondWalletAddress= '"+list.address+"'";
+
+        var fields = ['address','status', 'currency'];
+        var params = {};
+
+        library.dbLite.query(queryString, params, fields, function(err, row) {
+          if(row && row[0] && row[0].status == 1) {
+            if(row[0].currency == 'BEL') {
+              return setImmediate(cb, list.address + trs.countryCode + ' wallet already attached');
+            } else {
+              return setImmediate(cb, list.address + ' wallet already attached');
+            }
+          } else {
+            cb(null, trs);
+          }
+        });
+    }, function (err) {
+      if(err) {
+        return cb(err);
+      }
+      cb(null, trs);
+    });
 	};
 
 	this.getBytes = function (trs) {
@@ -634,9 +667,6 @@ function AttachWallets () {
 	};
 
 	this.apply = function (trs, block, sender, cb) {
-    var key = trs.asset.ac_wallets.secondWalletAddress + ':' + trs.type;
-    library.oneoff.delete(key);
-
     setImmediate(cb);
 	};
 
@@ -678,8 +708,8 @@ function AttachWallets () {
 			var ac_wallets = {
         publicKey: raw.t_senderPublicKey,
 				status: raw.acw_status,
-        secondWalletAddress: raw.acw_secondWalletAddress,
-        currency: raw.acw_currency
+        whiteList: JSON.parse(raw.acw_secondWalletAddress),
+        currencyType: raw.acw_currencyType
 			};
 			return {ac_wallets: ac_wallets};
 		}
@@ -687,46 +717,53 @@ function AttachWallets () {
 
 	this.dbSave = function (trs, cb) {
     modules.accounts.getAccount({address: trs.senderId}, function(err, sender) {
-      library.dbLite.query("INSERT INTO white_label_wallets(senderId, secondWalletAddress, currency, status, transactionId) VALUES($senderId, $secondWalletAddress, $currency, $status, $transactionId)", {
+      library.dbLite.query("INSERT INTO white_label_wallets(senderId, secondWalletAddress, currencyType, status, transactionId) VALUES($senderId, $secondWalletAddress, $currencyType, $status, $transactionId)", {
         senderId: trs.senderId,
-        secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress,
-        currency: trs.asset.ac_wallets.currency,
+        secondWalletAddress: JSON.stringify(trs.asset.ac_wallets.whiteList),
+        currencyType: trs.asset.ac_wallets.currencyType,
         status: trs.asset.ac_wallets.status,
         transactionId: trs.id
       }, function(err) {
         if(err) {
           return setImmediate(cb, 'Database error');
         }
-        library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status) VALUES($accountId, $secondWalletAddress, $currency, $status)", {
-          accountId: trs.senderId,
-          secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress,
-          currency: trs.asset.ac_wallets.currency,
-          status: trs.asset.ac_wallets.status
-        }, function(err, rows) {
-          if(err) {
-            return setImmediate(cb, 'Database error');
-          }
-          library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
-            status: trs.asset.ac_wallets.status,
-            secondWalletAddress: trs.asset.ac_wallets.secondWalletAddress
-          }, function(err) {
-            if(trs.asset.ac_wallets.currency == 'BEL') {
-              modules.accounts.setAccountAndGet({ 
-                address: trs.asset.ac_wallets.secondWalletAddress, 
-                countryCode: trs.countryCode,
-                status: trs.asset.ac_wallets.status,
-                u_status: trs.asset.ac_wallets.status,
-                expDate: sender.expDate 
-              }, function (err, rec) {
-                if(err) {
-                  return setImmediate(cb, 'Database error');
-                }
+        async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+          library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status) VALUES($accountId, $secondWalletAddress, $currency, $status)", {
+            accountId: trs.senderId,
+            secondWalletAddress: list.address,
+            currency: list.currency,
+            status: trs.asset.ac_wallets.status
+          }, function(err, rows) {
+            if(err) {
+              return setImmediate(cb, 'Database error');
+            }
+            library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+              status: trs.asset.ac_wallets.status,
+              secondWalletAddress: list.address
+            }, function(err) {
+              if(trs.asset.ac_wallets.currencyType == 'BEL') {
+                modules.accounts.setAccountAndGet({ 
+                  address: list.address, 
+                  countryCode: trs.countryCode,
+                  status: trs.asset.ac_wallets.status,
+                  u_status: trs.asset.ac_wallets.status,
+                  expDate: sender.expDate 
+                }, function (err, res) {
+                  if(err) {
+                    return setImmediate(cb, 'Database error');
+                  }
+                  cb();
+                });
+              } else {
                 cb();
-              });
-            } else {
-              cb();
-            } 
+              } 
+            });
           });
+        }, function (err) {
+          if(err) {
+            return cb(err);
+          }
+          cb();
         });
       });
     });
@@ -754,14 +791,15 @@ function AttachMerchantWallets () {
       publicKey: data.sender.publicKey,
       status: data.sender.status,
       attachFrom: data.attachFrom,
+      attachFromCountryCode: data.attachFromCountryCode,
       attachTo: data.attachTo,
-      currency: data.currency
+      currencyType: data.currencyType
 		};
 		return trs;
 	};
 
 	this.calculateFee = function (trs, sender) {
-    if(trs.asset.ac_wallets.currency == 'BEL') {
+    if(trs.asset.ac_wallets.currencyType == 'BEL') {
       return constants.fees.attachMerchantWallets.BEL * constants.fixedPoint;
     } else {
       return constants.fees.attachMerchantWallets.NON_BEL * constants.fixedPoint;
@@ -769,7 +807,6 @@ function AttachMerchantWallets () {
 	};
 
 	this.verify = function (trs, sender, cb) {
-
 		if (trs.recipientId) {
 			return setImmediate(cb, 'Invalid recipient');
 		}
@@ -777,26 +814,39 @@ function AttachMerchantWallets () {
 		if (!trs.asset || !trs.asset.ac_wallets) {
 			return setImmediate(cb, 'Invalid transaction asset');
     }
-
-    var queryString = "SELECT secondWalletAddress, status, currency " + 
-    "FROM mem_accounts_attach_wallets acw " +
-    "WHERE " +
-    "secondWalletAddress= '"+trs.asset.ac_wallets.attachTo+"'";
-
-    var fields = ['address','status', 'currency'];
-    var params = {};
-
-    library.dbLite.query(queryString, params, fields, function(err, row) {
-      if(row && row[0] && row[0].status == 1) {
-        if(row[0].currency == 'BEL') {
-          return setImmediate(cb, trs.asset.ac_wallets.attachTo + trs.countryCode + ' wallet already attached');
-        } else {
-          return setImmediate(cb, trs.asset.ac_wallets.attachTo + ' wallet already attached');
+    if(trs.asset.ac_wallets.currencyType === 'BEL') {
+    
+      async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
+        if(!addressHelper.isAddress(list.address)) {
+          return cb("Wrong address found: " + list.address);
         }
-      } else {
-        cb(null, trs);
-      }
-    });
+        list.currency = list.currency.toUpperCase();
+        if(list.currency != 'BEL') {
+          return cb("you can attach only BEL wallet");
+        }
+        cb();
+      }, function (err) {
+        if(err) {
+          return cb(err);
+        }
+        cb();
+      });
+    } else if(trs.asset.ac_wallets.currencyType == 'NON-BEL') {
+      async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
+        list.currency = list.currency.toUpperCase();
+        if(list.currency == 'BEL') {
+          return cb("you can attach only NON-BEL wallet");
+        }
+        cb();
+      }, function (err) {
+        if(err) {
+          return cb(err);
+        }
+        cb();
+      });
+    } else {
+      return cb("currencyType must be BEL or NON-BEL");
+    }
 	};
 
 	this.process = function (trs, sender, cb) {
@@ -805,16 +855,39 @@ function AttachMerchantWallets () {
       if(!account) {
         return cb(address.concat(trs.countryCode) + ' wallet not exists');
       }
+      if(account.countryCode != trs.asset.ac_wallets.attachFromCountryCode) {
+        return cb("attachFromCountryCode mismatched!");
+      }
       if(account.status != 1) {
-        return cb(address.concat((account.countryCode)? account.countryCode: trs.countryCode) + ' wallet not verified');
+        return cb(address.concat((account.countryCode)? account.countryCode: trs.attachFromCountryCode) + ' wallet not verified');
       }
-      var key = trs.asset.ac_wallets.attachTo + ':' + trs.type;
-      if (library.oneoff.has(key)) {
-        return setImmediate(cb, 'Double submit');
-      }
-      library.oneoff.set(key, true);
       
-      return setImmediate(cb, null, trs);
+      async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
+        var queryString = "SELECT secondWalletAddress, status, currency " + 
+        "FROM mem_accounts_attach_wallets acw " +
+        "WHERE " +
+        "secondWalletAddress= '"+list.address+"'";
+    
+        var fields = ['address','status', 'currency'];
+        var params = {};
+    
+        library.dbLite.query(queryString, params, fields, function(err, row) {
+          if(row && row[0] && row[0].status == 1) {
+            if(row[0].currency == 'BEL') {
+              return setImmediate(cb, list.address + trs.asset.ac_wallets.attachFromCountryCode + ' wallet already attached');
+            } else {
+              return setImmediate(cb, list.address + ' wallet already attached');
+            }
+          } else {
+            cb(null, trs);
+          }
+        });
+      }, function (err) {
+        if(err) {
+          return cb(err);
+        }
+        cb(null, trs);
+      });
     });
 	};
 
@@ -833,9 +906,6 @@ function AttachMerchantWallets () {
 	};
 
 	this.apply = function (trs, block, sender, cb) {
-    var key = trs.asset.ac_wallets.attachTo + ':' + trs.type;
-    library.oneoff.delete(key);
-
     setImmediate(cb);
 	};
 
@@ -878,58 +948,69 @@ function AttachMerchantWallets () {
         publicKey: raw.t_senderPublicKey,
 				status: raw.mw_status,
         attachFrom: raw.mw_attachFrom,
-        attachTo: raw.mw_attachTo,
-        currency: raw.mw_currency
+        attachTo: JSON.parse(raw.mw_attachTo),
+        currencyType: raw.mw_currencyType,
+        attachFromCountryCode: raw.mw_attachFromCountryCode
 			};
 			return {ac_wallets: ac_wallets};
 		}
 	};
 
 	this.dbSave = function (trs, cb) {
-    modules.accounts.getAccount({address: trs.address}, function(err, sender) {
-      library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currency, status, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currency, $status, $transactionId)", {
+    modules.accounts.getAccount({address: trs.senderId}, function(err, sender) {
+      library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currencyType, status, attachFromCountryCode, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currencyType, $status, $attachFromCountryCode, $transactionId)", {
         senderId: trs.senderId,
         attachFrom: trs.asset.ac_wallets.attachFrom,
-        attachTo: trs.asset.ac_wallets.attachTo,
-        currency: trs.asset.ac_wallets.currency,
+        attachTo: JSON.stringify(trs.asset.ac_wallets.attachTo),
+        currencyType: trs.asset.ac_wallets.currencyType,
         status: trs.asset.ac_wallets.status,
+        attachFromCountryCode: trs.asset.ac_wallets.attachFromCountryCode,
         transactionId: trs.id
       }, function(err) {
         if(err) {
           return setImmediate(cb, 'Database error');
         }
-        library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, merchantWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $merchantWalletAddress)", {
-          accountId: trs.asset.ac_wallets.attachFrom,
-          secondWalletAddress: trs.asset.ac_wallets.attachTo,
-          currency: trs.asset.ac_wallets.currency,
-          status: trs.asset.ac_wallets.status,
-          merchantWalletAddress: trs.senderId
-        }, function(err, rows) {
-          if(err) {
-            return setImmediate(cb, 'Database error');
-          }
-          library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+        async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
+          library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, merchantWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $merchantWalletAddress)", {
+            accountId: trs.asset.ac_wallets.attachFrom,
+            secondWalletAddress: list.address,
+            currency: list.currency,
             status: trs.asset.ac_wallets.status,
-            secondWalletAddress: trs.asset.ac_wallets.attachTo
-          }, function(err) {
-            if(trs.asset.ac_wallets.currency == 'BEL') {
-              modules.accounts.setAccountAndGet({ 
-                address: trs.asset.ac_wallets.attachTo, 
-                countryCode: trs.countryCode,
-                status: trs.asset.ac_wallets.status,
-                u_status: trs.asset.ac_wallets.status,
-                expDate: sender.expDate 
-              }, function (err, rec) {
-                if(err) {
-                  return setImmediate(cb, 'Database error');
-                }
+            merchantWalletAddress: trs.senderId
+          }, function(err, rows) {
+            if(err) {
+              return setImmediate(cb, 'Database error');
+            }
+            library.dbLite.query("UPDATE mem_accounts_attach_wallets SET status=$status WHERE secondWalletAddress=$secondWalletAddress", {
+              status: trs.asset.ac_wallets.status,
+              secondWalletAddress: list.address
+            }, function(err) {
+              if(trs.asset.ac_wallets.currencyType == 'BEL') {
+                modules.accounts.setAccountAndGet({ 
+                  address: list.address, 
+                  countryCode: trs.asset.ac_wallets.attachFromCountryCode,
+                  status: trs.asset.ac_wallets.status,
+                  u_status: trs.asset.ac_wallets.status,
+                  expDate: sender.expDate 
+                }, function (err, res) {
+                  if(err) {
+                    return setImmediate(cb, 'Database error');
+                  }
+                  cb();
+                });
+              } else {
                 cb();
-              });
-            } else {
-              cb();
-            } 
+              } 
+            });
           });
+        }, function (err) {
+          if(err) {
+            return cb(err);
+          }
+          cb();
         });
+        /*
+        */
       });
     });
 	};
