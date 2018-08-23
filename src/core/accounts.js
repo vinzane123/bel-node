@@ -781,7 +781,7 @@ function AttachWallets () {
   }
 }
 
-//Attach wallet through merchant
+//Attach wallet on the behalf of user
 function attachWalletsOnBehalf () {
 	this.create = function (data, trs) {
 		trs.recipientId = null;
@@ -1027,7 +1027,7 @@ function attachWalletsOnBehalf () {
   }
 }
 
-// Enable kyc wallet by merchants
+// Enable wallet KYC on the behalf of user
 function EnableKYCByOnBehalfOfUser () {
 	this.create = function (data, trs) {
     trs.recipientId = data.recipientId;
@@ -1046,10 +1046,6 @@ function EnableKYCByOnBehalfOfUser () {
 	};
 
 	this.verify = function (trs, sender, cb) {
-
-    if(!sender.isMerchant) {
-      return cb("account is not merchant");
-    }
 
     if (trs.recipientId == sender.address) {
       return cb("Invalid recipientId, cannot be your self");
@@ -2038,7 +2034,7 @@ shared.getAccounts = function (req, cb) {
   });
 }
 
-// Add Merchant transactions
+// Enable KYC on the behalf of user
 shared.enableKYCOnBehalfOfUser = function (req, cb) {
   var body = req.body;
   library.scheme.validate(body, {
