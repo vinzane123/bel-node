@@ -617,14 +617,39 @@ function AttachWallets () {
         }
         cb();
       });
-    } else if(trs.asset.ac_wallets.currencyType != 'BEL' || trs.asset.ac_wallets.currencyType != 'NON-BEL') {
+    } else {
       return cb("currencyType must be BEL or NON-BEL");
     }
 	};
 
 	this.process = function (trs, sender, cb) {
-    
-		return setImmediate(cb, null, trs);
+    async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+      list.currency = list.currency.toUpperCase();
+        var queryString = "SELECT secondWalletAddress, status, currency " + 
+        "FROM mem_accounts_attach_wallets acw " +
+        "WHERE " +
+        "secondWalletAddress= '"+list.address+"'";
+
+        var fields = ['address','status', 'currency'];
+        var params = {};
+
+        library.dbLite.query(queryString, params, fields, function(err, row) {
+          if(row && row[0] && row[0].status == 1) {
+            if(row[0].currency == 'BEL') {
+              return setImmediate(cb, list.address + trs.countryCode + ' wallet already attached');
+            } else {
+              return setImmediate(cb, list.address + ' wallet already attached');
+            }
+          } else {
+            cb(null, trs);
+          }
+        });
+    }, function (err) {
+      if(err) {
+        return cb(err);
+      }
+      cb(null, trs);
+    });
 	};
 
 	this.getBytes = function (trs) {
@@ -791,7 +816,7 @@ function AttachMerchantWallets () {
     }
     if(trs.asset.ac_wallets.currencyType === 'BEL') {
     
-      async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+      async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
         if(!addressHelper.isAddress(list.address)) {
           return cb("Wrong address found: " + list.address);
         }
@@ -807,7 +832,7 @@ function AttachMerchantWallets () {
         cb();
       });
     } else if(trs.asset.ac_wallets.currencyType == 'NON-BEL') {
-      async.eachSeries(trs.asset.ac_wallets.whiteList, function (list, cb) {
+      async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
         list.currency = list.currency.toUpperCase();
         if(list.currency == 'BEL') {
           return cb("you can attach only NON-BEL wallet");
@@ -837,7 +862,32 @@ function AttachMerchantWallets () {
         return cb(address.concat((account.countryCode)? account.countryCode: trs.attachFromCountryCode) + ' wallet not verified');
       }
       
-      return setImmediate(cb, null, trs);
+      async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
+        var queryString = "SELECT secondWalletAddress, status, currency " + 
+        "FROM mem_accounts_attach_wallets acw " +
+        "WHERE " +
+        "secondWalletAddress= '"+list.address+"'";
+    
+        var fields = ['address','status', 'currency'];
+        var params = {};
+    
+        library.dbLite.query(queryString, params, fields, function(err, row) {
+          if(row && row[0] && row[0].status == 1) {
+            if(row[0].currency == 'BEL') {
+              return setImmediate(cb, list.address + trs.asset.ac_wallets.attachFromCountryCode + ' wallet already attached');
+            } else {
+              return setImmediate(cb, list.address + ' wallet already attached');
+            }
+          } else {
+            cb(null, trs);
+          }
+        });
+      }, function (err) {
+        if(err) {
+          return cb(err);
+        }
+        cb(null, trs);
+      });
     });
 	};
 

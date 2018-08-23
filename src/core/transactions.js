@@ -2722,7 +2722,7 @@ shared.attachWallets = function (req, cb) {
     if(!body.whiteList.length) {
       return cb("WhiteList atleast 1 wallet");
     }
-    if(body.whiteList.length >= constants.maxWhiteListWallets) {
+    if(body.whiteList.length > constants.maxWhiteListWallets) {
       return cb("You can whiteList maximum 10 wallets at a time.");
     }
     if(body.currencyType == 'BEL') {
@@ -3266,7 +3266,7 @@ shared.attachWalletThroughMerchant = function (req, cb) {
     if(!body.attachTo.length) {
       return cb("WhiteList atleast 1 wallet");
     }
-    if(body.attachTo.length >= constants.maxWhiteListWallets) {
+    if(body.attachTo.length > constants.maxWhiteListWallets) {
       return cb("You can whiteList maximum 10 wallets at a time.");
     }
     if(body.currencyType == 'BEL') {
@@ -3320,10 +3320,6 @@ private.attachWalletsByMerchant = function(body, cb) {
 
   var conCodeFrom = addressHelper.getCountryCodeFromAddress(body.attachFrom);
   body.attachFrom = addressHelper.removeCountryCodeFromAddress(body.attachFrom);
-
-  if(body.countryCode != conCodeFrom) {
-    return cb('country code mismatch');
-  }
 
   library.balancesSequence.add(function (cb) {
     if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
