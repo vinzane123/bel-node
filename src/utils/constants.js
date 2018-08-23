@@ -37,13 +37,11 @@ module.exports = {
       BEL: 0,
       NON_BEL: 0
     },
-    attachMerchantWallets: {
+    attachWalletsOnBehalf: {
       BEL: 0,
       NON_BEL: 0
     },
-    merchant: 50,
-    verifier: 50,
-    enableKYCByMerchant: 0
+    enableKYCOnBehalfOfUser: 0
   },
   blockHeightInterval: 2100000,
   milestonesBelPerBlock: [

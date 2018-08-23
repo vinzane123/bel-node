@@ -303,14 +303,14 @@ function InitialTransfer() {
   }
 }
 
-//Attach wallet through merchant
-function MerchantTransfer () {
+//ON Behalf payment for document verifivcation.
+function OnBehalfPaymentForDocVerification () {
 	this.create = function (data, trs) {
     trs.payFor = data.payFor;
 		trs.recipientId = data.recipientId;
     trs.amount = data.amount;
     trs.countryCode = data.countryCode;
-    trs.asset.merchant = {
+    trs.asset.onBehalf = {
       countryCode:  data.recepientCountryCode,
       payFor: data.payFor,
       payForCountryCode: data.payForCountryCode
@@ -323,10 +323,6 @@ function MerchantTransfer () {
 	};
 
 	this.verify = function (trs, sender, cb) {
-
-    if(!sender.isMerchant) {
-      return cb("account is not merchant");
-    }
 
 		if (!trs.recipientId) {
 			return setImmediate(cb, 'Invalid recipient');
@@ -354,26 +350,16 @@ function MerchantTransfer () {
       if(!recipient) {
         return cb("Recipient not found!");
       }
-      
-      if(!recipient.isVerifier) {
-        return cb("Recipient must be verifier!");
-      }
       cb(null, trs);
     });
 	};
 
-	this.process = function (trs, sender, cb) {
-    /*var key = sender.address + ':' + trs.type;
-    if (library.oneoff.has(key)) {
-      return setImmediate(cb, 'Double submit');
-    }
-    library.oneoff.set(key, true);*/
-    
+	this.process = function (trs, sender, cb) {    
     modules.accounts.getAccount({address: trs.payFor}, function(err, account) {
       if(err) {
         return cb(err);
       }
-      if(account && (account.countryCode != trs.asset.merchant.payForCountryCode)) {
+      if(account && (account.countryCode != trs.asset.onBehalf.payForCountryCode)) {
         return cb("payFor country code mismatched!");
       }
       
@@ -383,7 +369,7 @@ function MerchantTransfer () {
 
 	this.getBytes = function (trs) {
 		try {
-      var buf = trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? new Buffer(trs.asset.merchant.countryCode, 'utf8') : null;
+      var buf = trs.asset && trs.asset.onBehalf && trs.asset.onBehalf.countryCode? new Buffer(trs.asset.onBehalf.countryCode, 'utf8') : null;
     } catch (e) {
       throw Error(e.toString());
     }
@@ -392,7 +378,7 @@ function MerchantTransfer () {
 	};
 
 	this.apply = function (trs, block, sender, cb) {
-    var recepientCountryCode = (trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode)? trs.asset.merchant.countryCode: '';
+    var recepientCountryCode = (trs.asset && trs.asset.onBehalf && trs.asset.onBehalf.countryCode)? trs.asset.onBehalf.countryCode: '';
     modules.accounts.setAccountAndGet({ address: trs.recipientId, countryCode: recepientCountryCode }, function (err, recipient) {
       if (err) {
         return cb(err);
@@ -408,12 +394,10 @@ function MerchantTransfer () {
         cb(err);
       });
     });
-    /*var key = sender.address + ':' + trs.type
-    library.oneoff.delete(key);*/
 	};
 
 	this.undo = function (trs, block, sender, cb) {
-    var recepientCountryCode = (trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode)? trs.asset.merchant.countryCode: '';    
+    var recepientCountryCode = (trs.asset && trs.asset.onBehalf && trs.asset.onBehalf.countryCode)? trs.asset.onBehalf.countryCode: '';    
     modules.accounts.setAccountAndGet({ address: trs.recipientId, countryCode: recepientCountryCode }, function (err, recipient) {    
       if (err) {
         return cb(err);
@@ -445,37 +429,38 @@ function MerchantTransfer () {
 	};
 
 	this.dbRead = function (raw) {
-		if (!raw.mt_countryCode) {
+		if (!raw.dvp_countryCode) {
 			return null;
 		} else {
-			var merchant = {
-        countryCode: raw.mt_countryCode,
-        payFor: raw.mt_payFor,
-        payForCountryCode: raw.mt_payForCountryCode
+			var onBehalf = {
+        countryCode: raw.dvp_countryCode,
+        payFor: raw.dvp_payFor,
+        payForCountryCode: raw.dvp_payForCountryCode
       };
-			return {merchant: merchant};
+			return {onBehalf: onBehalf};
 		}
 	};
 
 	this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO merchant(countryCode, payFor, transactionId) VALUES($countryCode, $payFor, $transactionId)", {
-      countryCode: trs.asset && trs.asset.merchant && trs.asset.merchant.countryCode? trs.asset.merchant.countryCode: '',
-      payFor: trs.asset.merchant.payFor,
+    library.dbLite.query("INSERT INTO onBehalf_doc_verification_payment(countryCode, payFor, payForCountryCode, transactionId) VALUES($countryCode, $payFor, $payForCountryCode, $transactionId)", {
+      countryCode: trs.asset && trs.asset.onBehalf && trs.asset.onBehalf.countryCode? trs.asset.onBehalf.countryCode: '',
+      payFor: trs.asset.onBehalf.payFor,
+      payForCountryCode: trs.asset.onBehalf.payForCountryCode,
       transactionId: trs.id
     }, function(err) {
-      library.dbLite.query("INSERT INTO mem_accounts_merchant_trs(merchantId, merchantCountryCode, payFor, payForCountryCode, recipientId, recepientCountryCode, amount, timestamp) VALUES($merchantId, $merchantCountryCode, $payFor, $payForCountryCode, $recipientId, $recepientCountryCode, $amount, $timestamp)", {
-        merchantId: trs.senderId,
-        merchantCountryCode: trs.countryCode,
-        payFor: trs.asset.merchant.payFor,
-        payForCountryCode: trs.asset.merchant.payForCountryCode,
+      library.dbLite.query("INSERT INTO mem_accounts_onBehalf_doc_verification_payment(senderId, senderCountryCode, payFor, payForCountryCode, recipientId, recepientCountryCode, amount, timestamp) VALUES($senderId, $senderCountryCode, $payFor, $payForCountryCode, $recipientId, $recepientCountryCode, $amount, $timestamp)", {
+        senderId: trs.senderId,
+        senderCountryCode: trs.countryCode,
+        payFor: trs.asset.onBehalf.payFor,
+        payForCountryCode: trs.asset.onBehalf.payForCountryCode,
         recipientId: trs.recipientId,
-        recepientCountryCode: trs.asset.merchant.countryCode,
+        recepientCountryCode: trs.asset.onBehalf.countryCode,
         amount: trs.amount,
         timestamp: slots.getTime()
       }, function(err) {
         var data = {
-          address: trs.asset.merchant.payFor,
-          countryCode: trs.asset.merchant.payForCountryCode
+          address: trs.asset.onBehalf.payFor,
+          countryCode: trs.asset.onBehalf.payForCountryCode
         };
         modules.accounts.setAccountAndGet(data, cb);
       });
@@ -699,7 +684,7 @@ function Transactions(cb, scope) {
   library.base.transaction.attachAssetType(TransactionTypes.DOCUMENT_VERIFICATION_TRS, new InitialTransfer());  
   library.base.transaction.attachAssetType(TransactionTypes.STORAGE, new Storage());
   library.base.transaction.attachAssetType(TransactionTypes.LOCK, new Lock());
-  library.base.transaction.attachAssetType(TransactionTypes.MERCHANT_TRS, new MerchantTransfer());
+  library.base.transaction.attachAssetType(TransactionTypes.ONBEHALF_PAYMENT_FOR_DOC_VERIFICATION, new OnBehalfPaymentForDocVerification());
 
   setImmediate(cb, null, self);
 }
@@ -727,9 +712,9 @@ private.attachApi = function () {
     "put /initial": "initialTransactions",
     "get /wallet/info": "getWalletInfo",
     'get /attached/wallets': "getAttachedWallets",
-    "put /merchant/attach/wallet": "attachWalletThroughMerchant",
-    "put /merchant": "addMerchantTransactions",
-    "get /merchant/get": "getMerchantTransactions"
+    "put /onBehalf/attach/wallets": "attachWalletsOnBehalf",
+    "put /onBehalf/doc/veri/payment": "onBehalfDocVerificationPayment",
+    "get /onBehalf/doc/veri/payment/get": "getOnBehalfDocVerificationPayment"
   });
 
   router.use(function (req, res, next) {
@@ -1109,34 +1094,6 @@ private.checkVrificationOnKYCThroughAPI = function(sender, trs, cb) {
 				cb();
 			}
 		});
-  } else if(trs.type === TransactionTypes.MERCHANT) {
-    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
-    httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
-      library.logger.info('response from the KYC server: ', result);
-      if(!error && result && result.data){
-        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
-          return cb(addressWithCountryCode + ' wallet is not verified.');
-        } else  {
-					cb();
-				}
-			} else {
-				cb('Something went wrong.');
-			}
-    });
-  } else if(trs.type === TransactionTypes.VERIFIER) {
-    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
-    httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
-      library.logger.info('response from the KYC server: ', result);
-      if(!error && result){
-        if(!result.data[addressWithCountryCode]) {
-          return cb(addressWithCountryCode + ' wallet is not verified.');
-        } else  {
-					cb();
-				}
-			} else {
-				cb('Something went wrong.');
-			}
-    });
   } else {
     if(trs.recipientId){
       addresses.push(trs.recipientId);
@@ -1184,7 +1141,7 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
 	library.logger.info('******************** Using custom field to verify the KYC ************************')
   var recipientId = trs.recipientId;
   
-	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC || trs.type === TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT) {
+	if (trs.type === TransactionTypes.ENABLE_WALLET_KYC || trs.type === TransactionTypes.ENABLE_WALLET_KYC_ONBEHALF) {
     var addressWithCountryCode = (recipientId)? recipientId.concat(trs.asset.ac_status.countryCode): (sender.address.concat((sender && sender.countryCode)? sender.countryCode: ''));
     httpCall.call('GET', '/api/v1/accounts/status?walletAddressArray='+ addressWithCountryCode, null, function(error, result){
       library.logger.info('response from the KYC server: ', result);
@@ -1245,49 +1202,6 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
           cb('Something went wrong.');
         }
       });
-    });
-  } else if(trs.type === TransactionTypes.MERCHANT) {
-    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
-    httpCall.call('GET', '/api/v1/accounts/status?type=merchant&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
-      library.logger.info('response from the KYC server: ', result);
-      /*result = { 
-        data: { '9360959343898659339IN': '{"9360959343898659339IN":true,"merchant":true}' },
-        fielderror: null,
-        message: 'User\'s status validated successfully.',
-        isSuccess: true,
-        status: 'OK',
-        timestamp: 1534922190754 
-      };*/
-      result.data[addressWithCountryCode] = JSON.parse(result.data[addressWithCountryCode]);
-      if(!error && result && result.data){
-        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
-          return cb(addressWithCountryCode + ' wallet is not verified.');
-        } else if(!result.data[addressWithCountryCode]['merchant']) {
-          return cb(addressWithCountryCode + ' is not merchant');
-        } else  {
-					cb();
-				}
-			} else {
-				cb('Something went wrong.');
-			}
-    });
-  } else if(trs.type === TransactionTypes.VERIFIER) {
-    var addressWithCountryCode = sender.address.concat((sender && sender.countryCode)? sender.countryCode: '');
-    httpCall.call('GET', '/api/v1/accounts/status?type=verifier&walletAddressArray='+ addressWithCountryCode, null, function(error, result){
-      library.logger.info('response from the KYC server: ', result);
-      result.data[addressWithCountryCode] = JSON.parse(result.data[addressWithCountryCode]);
-      if(!error && result && result.data){
-        if(!result.data[addressWithCountryCode][addressWithCountryCode]) {
-          return cb(addressWithCountryCode + ' wallet is not verified.');
-        } else if(!result.data[addressWithCountryCode]['verifier']) {
-          return cb(addressWithCountryCode + ' is not verifier');
-        } else  {
-          trs.asset.verifier.status = 1;
-					cb();
-				}
-			} else {
-				cb('Something went wrong.');
-			}
     });
   } else if(trs.type === TransactionTypes.DOCUMENT_VERIFICATION_TRS) {
     modules.accounts.getAccount({address : recipientId}, function (err, recipient){
@@ -1648,7 +1562,7 @@ shared.getTransaction = function (req, cb) {
   });
 }
 
-shared.getMerchantTransactions = function (req, cb) {
+shared.getOnBehalfDocVerificationPayment = function (req, cb) {
   var query = req.body;
   library.scheme.validate(query, {
     type: 'object',
@@ -1681,9 +1595,6 @@ shared.getMerchantTransactions = function (req, cb) {
       if(!account) {
         return cb('account not found!');
       }
-      if(!account.isMerchant) {
-        return cb('account is not merchant');
-      }
       if(conCode != account.countryCode) {
         return cb('country code mismatched'); 
       }
@@ -1695,14 +1606,14 @@ shared.getMerchantTransactions = function (req, cb) {
       if(req.body.offset) {
         filter += " offset " +req.body.offset;
       }
-      library.dbLite.query("SELECT count(*) FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'", {}, ['count'], function(err, row) {
+      library.dbLite.query("SELECT count(*) FROM mem_accounts_onBehalf_doc_verification_payment WHERE senderId=" + "'"+query.address+"'", {}, ['count'], function(err, row) {
         var count = row[0].count;
-        var queryString = "SELECT * FROM mem_accounts_merchant_trs WHERE merchantId=" + "'"+query.address+"'" + filter;
+        var queryString = "SELECT * FROM mem_accounts_onBehalf_doc_verification_payment WHERE senderId=" + "'"+query.address+"'" + filter;
         params = {};
-        fields = ["merchantId", "merchantCountryCode", "payFor", "payForCountryCode", "recipientId", "recepientCountryCode", "amount", "timestamp"];
+        fields = ["senderId", "senderCountryCode", "payFor", "payForCountryCode", "recipientId", "recepientCountryCode", "amount", "timestamp"];
         library.dbLite.query(queryString, params, fields, function(err, rows) {
           rows.forEach(function(row) {
-            row.merchantId = row.merchantId.concat(row.merchantCountryCode);
+            row.senderId = row.senderId.concat(row.senderCountryCode);
             row.payFor = row.payFor.concat(row.payForCountryCode);
             row.recipientId = row.recipientId.concat(row.recepientCountryCode);
           });
@@ -2846,10 +2757,6 @@ shared.initialTransactions = function (req, cb) {
         if(body.recepientCountryCode != recipient.countryCode) {
           return cb("Recipient country code mismatched!");
         }
-
-        if(!recipient.isVerifier) {
-          return cb("Recipient must be verifier!");
-        }
         
         var recipientId = recipient.address; 
 
@@ -3206,7 +3113,7 @@ private.attachWallets = function(body, cb) {
     cb(null, { transactionId: transaction[0].id });
   });
 }
-shared.attachWalletThroughMerchant = function (req, cb) {
+shared.attachWalletsOnBehalf = function (req, cb) {
   var body = req.body;
   library.scheme.validate(body, {
     type: "object",
@@ -3287,7 +3194,7 @@ shared.attachWalletThroughMerchant = function (req, cb) {
         if(err) {
           return cb(err);
         }
-        private.attachWalletsByMerchant(body, cb);
+        private.attachWalletsByOnBehalf(body, cb);
       });
     } else if(body.currencyType == 'NON-BEL') {
       async.eachSeries(body.attachTo, function (list, cb) {
@@ -3300,7 +3207,7 @@ shared.attachWalletThroughMerchant = function (req, cb) {
         if(err) {
           return cb(err);
         }
-        private.attachWalletsByMerchant(body, cb);
+        private.attachWalletsByOnBehalf(body, cb);
       });
     } else {
       return cb("currencyType must be BEL or NON-BEL");
@@ -3308,7 +3215,7 @@ shared.attachWalletThroughMerchant = function (req, cb) {
   });
 }
 
-private.attachWalletsByMerchant = function(body, cb) {
+private.attachWalletsByOnBehalf = function(body, cb) {
   var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
   var keypair = ed.MakeKeypair(hash);
 
@@ -3318,7 +3225,6 @@ private.attachWalletsByMerchant = function(body, cb) {
     }
   }
 
-  var conCodeFrom = addressHelper.getCountryCodeFromAddress(body.attachFrom);
   body.attachFrom = addressHelper.removeCountryCodeFromAddress(body.attachFrom);
 
   library.balancesSequence.add(function (cb) {
@@ -3366,7 +3272,7 @@ private.attachWalletsByMerchant = function(body, cb) {
 
           try {
             var transaction = library.base.transaction.create({
-              type: TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS,
+              type: TransactionTypes.ONBEHALF_WHITELIST_WALLETS,
               sender: account,
               keypair: keypair,
               requester: keypair,
@@ -3394,10 +3300,6 @@ private.attachWalletsByMerchant = function(body, cb) {
             return cb("Account not found");
           }
           
-          if (!account.isMerchant) {
-            return cb("account is not merchant");
-          }
-          
           if(account.countryCode != body.countryCode) {
             return cb("Account country code mismatched!");
           }
@@ -3415,7 +3317,7 @@ private.attachWalletsByMerchant = function(body, cb) {
 
           try {
             var transaction = library.base.transaction.create({
-              type: TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS,
+              type: TransactionTypes.ONBEHALF_WHITELIST_WALLETS,
               sender: account,
               keypair: keypair,
               secondKeypair: secondKeypair,
@@ -3441,8 +3343,8 @@ private.attachWalletsByMerchant = function(body, cb) {
   });
 }
 
-// Add Merchant transactions
-shared.addMerchantTransactions = function (req, cb) {
+// onBehalf DocVerification Payment
+shared.onBehalfDocVerificationPayment = function (req, cb) {
   var body = req.body;
   library.scheme.validate(body, {
     type: "object",
@@ -3540,10 +3442,6 @@ shared.addMerchantTransactions = function (req, cb) {
           return cb("Recipient country code mismatched!");
         }
 
-        if(!recipient.isVerifier) {
-          return cb("Recipient must be verifier!");
-        }
-
         if (!recipientId) {
           return cb("Recipient not found!");
         }
@@ -3592,7 +3490,7 @@ shared.addMerchantTransactions = function (req, cb) {
 
               try {
                 var transaction = library.base.transaction.create({
-                  type: TransactionTypes.MERCHANT_TRS,
+                  type: TransactionTypes.ONBEHALF_PAYMENT_FOR_DOC_VERIFICATION,
                   amount: body.amount,
                   sender: account,
                   payFor: body.payFor,
@@ -3621,9 +3519,6 @@ shared.addMerchantTransactions = function (req, cb) {
             if (!account) {
               return cb("Account not found");
             }
-            if (!account.isMerchant) {
-              return cb("account is not merchant");
-            }
             
             if(account.countryCode != body.senderCountryCode) {
               return cb("Account country code mismatched!");
@@ -3646,7 +3541,7 @@ shared.addMerchantTransactions = function (req, cb) {
 
             try {
               var transaction = library.base.transaction.create({
-                type: TransactionTypes.MERCHANT_TRS,
+                type: TransactionTypes.ONBEHALF_PAYMENT_FOR_DOC_VERIFICATION,
                 amount: body.amount,
                 sender: account,
                 payFor: body.payFor,
