@@ -62,7 +62,7 @@ Transaction.prototype.create = function (data) {
   trs.fee = private.types[trs.type].calculateFee.call(this, trs, data.sender) || 0;
 
   //if(trs.type === TransactionTypes.ENABLE_WALLET_KYC || trs.type === TransactionTypes.DISABLE_WALLET_KYC) { trs.fee = 0; }
-  //if(trs.type === TransactionTypes.WHITELIST_WALLET_TRS || trs.type === TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS) { trs.fee = 0; }
+  //if(trs.type === TransactionTypes.WHITELIST_WALLET_TRS || trs.type === TransactionTypes.ONBEHALF_WHITELIST_WALLETS) { trs.fee = 0; }
   return trs;
 }
 
@@ -394,7 +394,7 @@ Transaction.prototype.verify = function (trs, sender, requester, cb) { //inherit
   // Calc fee
   var fee = private.types[trs.type].calculateFee.call(private.types[trs.type], trs, sender) || 0;
   
-  if ((!fee || trs.fee != fee) && trs.type !== TransactionTypes.ENABLE_WALLET_KYC && trs.type !== TransactionTypes.DISABLE_WALLET_KYC && trs.type !== TransactionTypes.WHITELIST_WALLET_TRS && trs.type !== TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS && trs.type !== TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT) {
+  if ((!fee || trs.fee != fee) && trs.type !== TransactionTypes.ENABLE_WALLET_KYC && trs.type !== TransactionTypes.DISABLE_WALLET_KYC && trs.type !== TransactionTypes.WHITELIST_WALLET_TRS && trs.type !== TransactionTypes.ONBEHALF_WHITELIST_WALLETS && trs.type !== TransactionTypes.ENABLE_WALLET_KYC_ONBEHALF) {
     return setImmediate(cb, "Invalid transaction type/fee: " + trs.id);
   }
   // Check amount

@@ -635,7 +635,7 @@ function AttachWallets () {
 
         library.dbLite.query(queryString, params, fields, function(err, row) {
           if(row && row[0] && row[0].status == 1) {
-            if(row[0].currency == 'BEL') {
+            if(row[0].currency == 'BEL' && row[0].currency == list.currency) {
               return setImmediate(cb, list.address + trs.countryCode + ' wallet already attached');
             } else {
               return setImmediate(cb, list.address + ' wallet already attached');
@@ -781,8 +781,8 @@ function AttachWallets () {
   }
 }
 
-//Attach wallet through merchant
-function AttachMerchantWallets () {
+//Attach wallet on the behalf of user
+function attachWalletsOnBehalf () {
 	this.create = function (data, trs) {
 		trs.recipientId = null;
     trs.amount = 0;
@@ -800,9 +800,9 @@ function AttachMerchantWallets () {
 
 	this.calculateFee = function (trs, sender) {
     if(trs.asset.ac_wallets.currencyType == 'BEL') {
-      return constants.fees.attachMerchantWallets.BEL * constants.fixedPoint;
+      return constants.fees.attachWalletsOnBehalf.BEL * constants.fixedPoint;
     } else {
-      return constants.fees.attachMerchantWallets.NON_BEL * constants.fixedPoint;
+      return constants.fees.attachWalletsOnBehalf.NON_BEL * constants.fixedPoint;
     }
 	};
 
@@ -873,7 +873,7 @@ function AttachMerchantWallets () {
     
         library.dbLite.query(queryString, params, fields, function(err, row) {
           if(row && row[0] && row[0].status == 1) {
-            if(row[0].currency == 'BEL') {
+            if(row[0].currency == 'BEL' && row[0].currency == list.currency) {
               return setImmediate(cb, list.address + trs.asset.ac_wallets.attachFromCountryCode + ' wallet already attached');
             } else {
               return setImmediate(cb, list.address + ' wallet already attached');
@@ -923,7 +923,7 @@ function AttachMerchantWallets () {
 
 	this.objectNormalize = function (trs) {
     var schema = {
-      id: 'AttachMerchantWallets',
+      id: 'attachWalletsOnBehalf',
       type: 'object',
       properties: {
         publicKey: {
@@ -935,7 +935,7 @@ function AttachMerchantWallets () {
     };
 		var report = library.scheme.validate(trs.asset.ac_wallets, schema);
 		if (!report) {
-      throw new Error("Failed to validate AttachMerchantWallets schema: " + library.scheme.getLastError());
+      throw new Error("Failed to validate attachWalletsOnBehalf schema: " + library.scheme.getLastError());
     }
 		return trs;
 	};
@@ -958,7 +958,7 @@ function AttachMerchantWallets () {
 
 	this.dbSave = function (trs, cb) {
     modules.accounts.getAccount({address: trs.senderId}, function(err, sender) {
-      library.dbLite.query("INSERT INTO white_label_merchant_wallets(senderId, attachFrom, attachTo, currencyType, status, attachFromCountryCode, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currencyType, $status, $attachFromCountryCode, $transactionId)", {
+      library.dbLite.query("INSERT INTO white_label_wallets_onBehalf(senderId, attachFrom, attachTo, currencyType, status, attachFromCountryCode, transactionId) VALUES($senderId, $attachFrom, $attachTo, $currencyType, $status, $attachFromCountryCode, $transactionId)", {
         senderId: trs.senderId,
         attachFrom: trs.asset.ac_wallets.attachFrom,
         attachTo: JSON.stringify(trs.asset.ac_wallets.attachTo),
@@ -971,12 +971,12 @@ function AttachMerchantWallets () {
           return setImmediate(cb, 'Database error');
         }
         async.eachSeries(trs.asset.ac_wallets.attachTo, function (list, cb) {
-          library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, merchantWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $merchantWalletAddress)", {
+          library.dbLite.query("INSERT OR IGNORE INTO mem_accounts_attach_wallets(accountId, secondWalletAddress, currency, status, onBehalfUserWalletAddress) VALUES($accountId, $secondWalletAddress, $currency, $status, $onBehalfUserWalletAddress)", {
             accountId: trs.asset.ac_wallets.attachFrom,
             secondWalletAddress: list.address,
             currency: list.currency,
             status: trs.asset.ac_wallets.status,
-            merchantWalletAddress: trs.senderId
+            onBehalfUserWalletAddress: trs.senderId
           }, function(err, rows) {
             if(err) {
               return setImmediate(cb, 'Database error');
@@ -1027,414 +1027,8 @@ function AttachMerchantWallets () {
   }
 }
 
-// Add merchant contract
-function Merchant() {
-  this.create = function (data, trs) {
-    trs.recipientId = null;
-    trs.amount = 0;
-    trs.countryCode = data.countryCode;
-    trs.asset.merchant = {
-      merchantName: data.merchantName,
-      publicKey: data.sender.publicKey
-    };
-
-    if(trs.asset.merchant.merchantName){
-      trs.asset.merchant.merchantName=trs.asset.merchant.merchantName.toLowerCase().trim();
-    }
-    
-    return trs;
-  }
-
-  this.calculateFee = function (trs, sender) {
-    return constants.fees.merchant * constants.fixedPoint;
-  }
-
-  this.verify = function (trs, sender, cb) {
-    if (trs.recipientId) {
-      return setImmediate(cb, "Invalid recipient");
-    }
-
-    if (trs.amount != 0) {
-      return setImmediate(cb, "Invalid transaction amount");
-    }
-
-    if (sender.isMerchant) {
-      return cb("Account is already a merchant");
-    }
-
-    if (!trs.asset || !trs.asset.merchant) {
-      return cb("Invalid transaction asset");
-    }
-
-    if (!trs.asset.merchant.merchantName) {
-      return cb("Merchant Name is undefined");
-    }
-
-    var allowSymbols = /^[a-z0-9!@$&_.]+$/g;
-
-    var merchantName = String(trs.asset.merchant.merchantName).toLowerCase().trim();
-
-    if (merchantName == "") {
-      return cb("Empty merchantName");
-    }
-
-    if (merchantName.length > 20) {
-      return cb("Merchant name is too long. Maximum is 20 characters");
-    }
-
-    if (addressHelper.isAddress(merchantName)) {
-      return cb("Merchant name can not be a potential address");
-    }
-
-    if (!allowSymbols.test(merchantName)) {
-      return cb("Merchant name can only contain alphanumeric characters with the exception of !@$&_.");
-    }
-
-    modules.accounts.getAccount({
-      merchantName: merchantName
-    }, function (err, account) {
-      if (err) {
-        return cb(err);
-      }
-
-      if (account) {
-        return cb("Merchant name already exists");
-      }
-
-      cb(null, trs);
-    });
-  }
-
-  this.process = function (trs, sender, cb) {
-    setImmediate(cb, null, trs);
-  }
-
-  this.getBytes = function (trs) {
-    if (!trs.asset.merchant.merchantName) {
-      return null;
-    }
-    try {
-      var buf = new Buffer(trs.asset.merchant.merchantName, 'utf8');
-    } catch (e) {
-      throw Error(e.toString());
-    }
-
-    return buf;
-  }
-
-  this.apply = function (trs, block, sender, cb) {
-    var data = {
-      address: sender.address,
-      u_isMerchant: 0,
-      isMerchant: 1
-    }
-
-    if (trs.asset.merchant.merchantName) {
-      data.u_merchantName = null;
-      data.merchantName = trs.asset.merchant.merchantName;
-    }
-
-    modules.accounts.setAccountAndGet(data, cb);
-  }
-
-  this.undo = function (trs, block, sender, cb) {
-    var data = {
-      address: sender.address,
-      u_isMerchant: 1,
-      isMerchant: 0
-    }
-
-    if (trs.asset.merchant.merchantName) {
-      data.merchantName = null;
-      data.u_merchantName = trs.asset.merchant.merchantName;
-    }
-
-    modules.accounts.setAccountAndGet(data, cb);
-  }
-
-  this.applyUnconfirmed = function (trs, sender, cb) {
-    if (sender.isMerchant) {
-      return cb("Account is already a merchant");
-    }
-
-    var nameKey = trs.asset.merchant.merchantName + ':' + trs.type
-    var idKey = sender.address + ':' + trs.type
-    if (library.oneoff.has(nameKey) || library.oneoff.has(idKey)) {
-      return setImmediate(cb, 'Double submit')
-    }
-    library.oneoff.set(nameKey, true)
-    library.oneoff.set(idKey, true)
-    setImmediate(cb) 
-  }
-
-  this.undoUnconfirmed = function (trs, sender, cb) {
-    var nameKey = trs.asset.merchant.merchantName + ':' + trs.type
-    var idKey = sender.address + ':' + trs.type
-    library.oneoff.delete(nameKey)
-    library.oneoff.delete(idKey)
-    setImmediate(cb)
-  }
-
-  this.objectNormalize = function (trs) {
-    var report = library.scheme.validate(trs.asset.merchant, {
-      type: "object",
-      properties: {
-        publicKey: {
-          type: "string",
-          format: "publicKey"
-        }
-      },
-      required: ["publicKey"]
-    });
-
-    if (!report) {
-      throw Error("Can't verify merchant transaction, incorrect parameters: " + library.scheme.getLastError());
-    }
-
-    return trs;
-  }
-
-  this.dbRead = function (raw) {
-    if (!raw.mr_merchantName) {
-      return null;
-    } else {
-      var merchant = {
-        merchantName: raw.mr_merchantName,
-        publicKey: raw.t_senderPublicKey,
-        address: raw.t_senderId
-      }
-
-      return {merchant: merchant};
-    }
-  }
-
-  this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO merchants(merchantName, transactionId) VALUES($merchantName, $transactionId)", {
-      merchantName: trs.asset.merchant.merchantName,
-      transactionId: trs.id
-    }, cb);
-  }
-
-  this.ready = function (trs, sender) {
-    if (util.isArray(sender.multisignatures) && sender.multisignatures.length) {
-      if (!trs.signatures) {
-        return false;
-      }
-      return trs.signatures.length >= sender.multimin - 1;
-    } else {
-      return true;
-    }
-  }
-}
-
-// Add verifire contract
-function Verifier() {
-  this.create = function (data, trs) {
-    trs.recipientId = null;
-    trs.amount = 0;
-    trs.countryCode = data.countryCode;
-    trs.asset.verifier = {
-      verifierName: data.verifierName,
-      publicKey: data.sender.publicKey
-    };
-
-    if(trs.asset.verifier.verifierName){
-      trs.asset.verifier.verifierName=trs.asset.verifier.verifierName.toLowerCase().trim();
-    }
-    
-    return trs;
-  }
-
-  this.calculateFee = function (trs, sender) {
-    return constants.fees.verifier * constants.fixedPoint;
-  }
-
-  this.verify = function (trs, sender, cb) {
-    if (trs.recipientId) {
-      return setImmediate(cb, "Invalid recipient");
-    }
-
-    if (trs.amount != 0) {
-      return setImmediate(cb, "Invalid transaction amount");
-    }
-
-    if (sender.isVerifier && sender.status) {
-      return cb("Account is already a verifier");
-    }
-
-    if (!trs.asset || !trs.asset.verifier) {
-      return cb("Invalid transaction asset");
-    }
-
-    if (!trs.asset.verifier.verifierName) {
-      return cb("Verifier Name is undefined");
-    }
-
-    var allowSymbols = /^[a-z0-9!@$&_.]+$/g;
-
-    var verifierName = String(trs.asset.verifier.verifierName).toLowerCase().trim();
-
-    if (verifierName == "") {
-      return cb("Empty verifierName");
-    }
-
-    if (verifierName.length > 20) {
-      return cb("Verifier name is too long. Maximum is 20 characters");
-    }
-
-    if (addressHelper.isAddress(verifierName)) {
-      return cb("Verifier name can not be a potential address");
-    }
-
-    if (!allowSymbols.test(verifierName)) {
-      return cb("Verifier name can only contain alphanumeric characters with the exception of !@$&_.");
-    }
-
-    modules.accounts.getAccount({
-      verifierName: verifierName
-    }, function (err, account) {
-      if (err) {
-        return cb(err);
-      }
-
-      if (account && account.address != sender.address) {
-        return cb("Verifier name already exists");
-      }
-
-      cb(null, trs);
-    });
-  }
-
-  this.process = function (trs, sender, cb) {
-    setImmediate(cb, null, trs);
-  }
-
-  this.getBytes = function (trs) {
-    if (!trs.asset.verifier.verifierName) {
-      return null;
-    }
-    try {
-      var buf = new Buffer(trs.asset.verifier.verifierName, 'utf8');
-    } catch (e) {
-      throw Error(e.toString());
-    }
-
-    return buf;
-  }
-
-  this.apply = function (trs, block, sender, cb) {
-    var data = {
-      address: sender.address,
-      u_isVerifier: 0,
-      isVerifier: 1,
-      status: trs.asset.verifier.status,
-      u_status: trs.asset.verifier.status
-    }
-
-    if (trs.asset.verifier.verifierName) {
-      data.u_verifierName = null;
-      data.verifierName = trs.asset.verifier.verifierName;
-    }
-
-    modules.accounts.setAccountAndGet(data, cb);
-  }
-
-  this.undo = function (trs, block, sender, cb) {
-    var data = {
-      address: sender.address,
-      u_isVerifier: 1,
-      isVerifier: 0,
-      status: trs.asset.verifier.status,
-      u_status: trs.asset.verifier.status
-    }
-
-    if (trs.asset.verifier.verifierName) {
-      data.verifierName = null;
-      data.u_verifierName = trs.asset.verifier.verifierName;
-    }
-
-    modules.accounts.setAccountAndGet(data, cb);
-  }
-
-  this.applyUnconfirmed = function (trs, sender, cb) {
-    if (sender.isVerifier && sender.status) {
-      return cb("Account is already a verifier");
-    }
-
-    var nameKey = trs.asset.verifier.verifierName + ':' + trs.type
-    var idKey = sender.address + ':' + trs.type
-    if (library.oneoff.has(nameKey) || library.oneoff.has(idKey)) {
-      return setImmediate(cb, 'Double submit')
-    }
-    library.oneoff.set(nameKey, true)
-    library.oneoff.set(idKey, true)
-    setImmediate(cb) 
-  }
-
-  this.undoUnconfirmed = function (trs, sender, cb) {
-    var nameKey = trs.asset.verifier.verifierName + ':' + trs.type
-    var idKey = sender.address + ':' + trs.type
-    library.oneoff.delete(nameKey)
-    library.oneoff.delete(idKey)
-    setImmediate(cb)
-  }
-
-  this.objectNormalize = function (trs) {
-    var report = library.scheme.validate(trs.asset.verifier, {
-      type: "object",
-      properties: {
-        publicKey: {
-          type: "string",
-          format: "publicKey"
-        }
-      },
-      required: ["publicKey"]
-    });
-
-    if (!report) {
-      throw Error("Can't verify verifier transaction, incorrect parameters: " + library.scheme.getLastError());
-    }
-
-    return trs;
-  }
-
-  this.dbRead = function (raw) {
-    if (!raw.vr_verifierName) {
-      return null;
-    } else {
-      var verifier = {
-        verifierName: raw.vr_verifierName,
-        publicKey: raw.t_senderPublicKey,
-        address: raw.t_senderId,
-        status: raw.vr_status
-      }
-
-      return {verifier: verifier};
-    }
-  }
-
-  this.dbSave = function (trs, cb) {
-    library.dbLite.query("INSERT INTO verifiers(verifierName, status, transactionId) VALUES($verifierName, $status, $transactionId)", {
-      verifierName: trs.asset.verifier.verifierName,
-      status: trs.asset.verifier.status,
-      transactionId: trs.id
-    }, cb);
-  }
-
-  this.ready = function (trs, sender) {
-    if (util.isArray(sender.multisignatures) && sender.multisignatures.length) {
-      if (!trs.signatures) {
-        return false;
-      }
-      return trs.signatures.length >= sender.multimin - 1;
-    } else {
-      return true;
-    }
-  }
-}
-
-// Enable kyc wallet by merchants
-function EnableKYCByMerchant () {
+// Enable wallet KYC on the behalf of user
+function EnableKYCByOnBehalfOfUser () {
 	this.create = function (data, trs) {
     trs.recipientId = data.recipientId;
     trs.countryCode = data.countryCode;
@@ -1448,14 +1042,10 @@ function EnableKYCByMerchant () {
 	};
 
 	this.calculateFee = function (trs, sender) {
-    return constants.fees.enableKYCByMerchant * constants.fixedPoint;
+    return constants.fees.enableKYCOnBehalfOfUser * constants.fixedPoint;
 	};
 
 	this.verify = function (trs, sender, cb) {
-
-    if(!sender.isMerchant) {
-      return cb("account is not merchant");
-    }
 
     if (trs.recipientId == sender.address) {
       return cb("Invalid recipientId, cannot be your self");
@@ -1623,10 +1213,8 @@ function Accounts(cb, scope) {
   library.base.transaction.attachAssetType(TransactionTypes.ENABLE_WALLET_KYC, new Acstatus());
   library.base.transaction.attachAssetType(TransactionTypes.DISABLE_WALLET_KYC, new DisableAcstatus());
   library.base.transaction.attachAssetType(TransactionTypes.WHITELIST_WALLET_TRS, new AttachWallets());
-  library.base.transaction.attachAssetType(TransactionTypes.WHITELIST_MERCHANT_WALLET_TRS, new AttachMerchantWallets());
-  library.base.transaction.attachAssetType(TransactionTypes.MERCHANT, new Merchant());
-  library.base.transaction.attachAssetType(TransactionTypes.VERIFIER, new Verifier());
-  library.base.transaction.attachAssetType(TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT, new EnableKYCByMerchant());
+  library.base.transaction.attachAssetType(TransactionTypes.ONBEHALF_WHITELIST_WALLETS, new attachWalletsOnBehalf());
+  library.base.transaction.attachAssetType(TransactionTypes.ENABLE_WALLET_KYC_ONBEHALF, new EnableKYCByOnBehalfOfUser());
   
   setImmediate(cb, null, self);
 }
@@ -1653,13 +1241,7 @@ private.attachApi = function () {
     "get /": "getAccount",
     "get /info": "getAccounts",
     "get /new": "newAccount",
-    "put /merchant": "addMerchant",
-    "get /merchants": "getMerchants",
-    "get /merchants/get": "getMerchant",
-    "put /verifier": "addVerifier",
-    "get /verifiers": "getVerifiers",
-    "get /verifiers/get": "getVerifier",
-    "put /merchants/enable/kyc": "enableKYCByMerchant"
+    "put /onBehalf/enable/kyc": "enableKYCOnBehalfOfUser"
   });
 
   if (process.env.DEBUG && process.env.DEBUG.toUpperCase() == "TRUE") {
@@ -2370,528 +1952,6 @@ shared.addDelegates = function (req, cb) {
   });
 }
 
-//Add merchant
-shared.addMerchant = function (req, cb) {
-  var body = req.body;
-  library.scheme.validate(body, {
-    type: "object",
-    properties: {
-      secret: {
-        type: "string",
-        minLength: 1,
-        maxLength: 100
-      },
-      publicKey: {
-        type: "string",
-        format: "publicKey"
-      },
-      secondSecret: {
-        type: "string",
-        minLength: 1,
-        maxLength: 100
-      },
-      merchantName: {
-        type: "string"
-      },
-      countryCode: {
-        type: "string",
-        maxLength: 2
-      }
-    },
-    required: ["secret", "countryCode"]
-  }, function (err) {
-    if (err) {
-      return cb(err[0].message);
-    }
-
-    var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
-    var keypair = ed.MakeKeypair(hash);
-
-    if (body.publicKey) {
-      if (keypair.publicKey.toString('hex') != body.publicKey) {
-        return cb("Invalid passphrase");
-      }
-    }
-
-    library.balancesSequence.add(function (cb) {
-      if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
-        modules.accounts.getAccount({publicKey: body.multisigAccountPublicKey}, function (err, account) {
-          if (err) {
-            return cb(err.toString());
-          }
-
-          if (!account) {
-            return cb("Multisignature account not found");
-          }
-
-          if (!account.multisignatures || !account.multisignatures) {
-            return cb("Account does not have multisignatures enabled");
-          }
-
-          if (account.multisignatures.indexOf(keypair.publicKey.toString('hex')) < 0) {
-            return cb("Account does not belong to multisignature group");
-          }
-
-          modules.accounts.getAccount({publicKey: keypair.publicKey}, function (err, requester) {
-            if (err) {
-              return cb(err.toString());
-            }
-
-            if (!requester || !requester.publicKey) {
-              return cb("Invalid requester");
-            }
-
-            if (requester.secondSignature && !body.secondSecret) {
-              return cb("Invalid second passphrase");
-            }
-
-            if (requester.publicKey == account.publicKey) {
-              return cb("Incorrect requester");
-            }
-
-            var secondKeypair = null;
-
-            if (requester.secondSignature) {
-              var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
-              secondKeypair = ed.MakeKeypair(secondHash);
-            }
-
-            try {
-              var transaction = library.base.transaction.create({
-                type: TransactionTypes.MERCHANT,
-                merchantName: body.merchantName,
-                sender: account,
-                keypair: keypair,
-                secondKeypair: secondKeypair,
-                requester: keypair,
-                countryCode: body.countryCode
-              });
-            } catch (e) {
-              return cb(e.toString());
-            }
-            modules.transactions.receiveTransactions([transaction], cb);
-          });
-        });
-      } else {
-        modules.accounts.getAccount({publicKey: keypair.publicKey.toString('hex')}, function (err, account) {
-          library.logger.debug('=========================== after getAccount ==========================');
-          if (err) {
-            return cb(err.toString());
-          }
-          if (!account) {
-            return cb("Account not found");
-          }
-          if(account.isVerifier) {
-            return cb("Account is already registered as Verifier");
-          }
-          if(account.countryCode != body.countryCode) {
-            return cb("Account country code mismatched!");
-          }
-          if (account.secondSignature && !body.secondSecret) {
-            return cb("Invalid second passphrase");
-          }
-
-          var secondKeypair = null;
-
-          if (account.secondSignature) {
-            var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
-            secondKeypair = ed.MakeKeypair(secondHash);
-          }
-
-          try {
-            var transaction = library.base.transaction.create({
-              type: TransactionTypes.MERCHANT,
-              merchantName: body.merchantName,
-              sender: account,
-              keypair: keypair,
-              secondKeypair: secondKeypair,
-              countryCode: body.countryCode
-            });
-          } catch (e) {
-            return cb(e.toString());
-          }
-          modules.transactions.receiveTransactions([transaction], cb);
-        });
-      }
-    }, function (err, transaction) {
-      if (err) {
-        return cb(err.toString());
-      }
-      cb(null, {transactionId: transaction[0].id });
-    });
-  });
-}
-
-shared.getMerchants = function (req, cb) {
-  var query = req.body;
-  library.scheme.validate(query, {
-    type: 'object',
-    properties: {
-      countryCode: {
-        type: "string",
-        minLength: 1
-      },
-      limit: {
-        type: "integer",
-        minimum: 0,
-        maximum: 101
-      },
-      offset: {
-        type: "integer",
-        minimum: 0
-      },
-      orderBy: {
-        type: "string"
-      }
-    }
-  }, function (err) {
-    if (err) {
-      return cb(err[0].message);
-    }
-
-    library.dbLite.query("SELECT count(*) FROM mem_accounts WHERE isMerchant=1", {}, ['count'], function(err, row) {
-      var count = row[0].count;
-      var data = {
-        isMerchant: 1,
-        offset: query.offset,
-        limit: query.limit,
-        sort: { "publicKey": 1 }
-      };
-      if(query.countryCode) {
-        data.countryCode = query.countryCode;
-      }
-      self.getAccounts(data, ["merchantName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, merchants) {
-        if (err) {
-          return cb(err.toString());
-        }
-        merchants.forEach(function(merchant) {
-          merchant.address = merchant.address.concat(merchant.countryCode);
-        });
-        cb(null, {data: merchants, count: count });
-      });
-    });
-
-  });
-}
-
-shared.getMerchant = function (req, cb) {
-  var query = req.body;
-  var queryJSON = {
-    isMerchant: 1
-  }; 
-  library.scheme.validate(query, {
-    type: "object",
-    properties: {
-      address: {
-        type: "string"
-      },
-      merchantName: {
-        type: "string"
-      }
-    }
-  }, function (err) {
-    if (err) {
-      return cb(err[0].message);
-    }
-
-    if(!(query.address || query.merchantName)) {
-      return cb("missing required params :address or merchantName!");
-    }
-
-    if(query.address) {
-      var conCode = addressHelper.getCountryCodeFromAddress(query.address);
-      queryJSON.address = addressHelper.removeCountryCodeFromAddress(query.address);
-    }
-
-    if(query.merchantName) {
-      queryJSON.merchantName = query.merchantName;
-    }
-    
-    modules.accounts.getAccount(queryJSON, function(err, account) {
-      if(err) {
-        return cb(err);
-      }
-
-      if(!account) {
-        return cb("merchant not found!");
-      }
-      if(!account.isMerchant) {
-        return cb("account is not merchant!");
-      }
-      if(conCode != account.countryCode) {
-        return cb("country code mismatched!");
-      }
-      cb(null, {
-        address: account.address.concat((account.countryCode)? account.countryCode: ''),
-        publicKey: account.publicKey,
-        vote: account.vote,
-        producedblocks: account.producedblocks,
-        missedblocks: account.missedblocks,
-        countryCode: account.countryCode,
-        merchantName: account.merchantName,
-      });
-    });
-  });
-}
-
-shared.addVerifier = function (req, cb) {
-  var body = req.body;
-  library.scheme.validate(body, {
-    type: "object",
-    properties: {
-      secret: {
-        type: "string",
-        minLength: 1,
-        maxLength: 100
-      },
-      publicKey: {
-        type: "string",
-        format: "publicKey"
-      },
-      secondSecret: {
-        type: "string",
-        minLength: 1,
-        maxLength: 100
-      },
-      verifierName: {
-        type: "string"
-      },
-      countryCode: {
-        type: "string",
-        maxLength: 2
-      }
-    },
-    required: ["secret", "countryCode"]
-  }, function (err) {
-    if (err) {
-      return cb(err[0].message);
-    }
-
-    var hash = crypto.createHash('sha256').update(body.secret, 'utf8').digest();
-    var keypair = ed.MakeKeypair(hash);
-
-    if (body.publicKey) {
-      if (keypair.publicKey.toString('hex') != body.publicKey) {
-        return cb("Invalid passphrase");
-      }
-    }
-
-    library.balancesSequence.add(function (cb) {
-      if (body.multisigAccountPublicKey && body.multisigAccountPublicKey != keypair.publicKey.toString('hex')) {
-        modules.accounts.getAccount({publicKey: body.multisigAccountPublicKey}, function (err, account) {
-          if (err) {
-            return cb(err.toString());
-          }
-
-          if (!account) {
-            return cb("Multisignature account not found");
-          }
-
-          if (!account.multisignatures || !account.multisignatures) {
-            return cb("Account does not have multisignatures enabled");
-          }
-
-          if (account.multisignatures.indexOf(keypair.publicKey.toString('hex')) < 0) {
-            return cb("Account does not belong to multisignature group");
-          }
-
-          modules.accounts.getAccount({publicKey: keypair.publicKey}, function (err, requester) {
-            if (err) {
-              return cb(err.toString());
-            }
-
-            if (!requester || !requester.publicKey) {
-              return cb("Invalid requester");
-            }
-
-            if (requester.secondSignature && !body.secondSecret) {
-              return cb("Invalid second passphrase");
-            }
-
-            if (requester.publicKey == account.publicKey) {
-              return cb("Incorrect requester");
-            }
-
-            var secondKeypair = null;
-
-            if (requester.secondSignature) {
-              var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
-              secondKeypair = ed.MakeKeypair(secondHash);
-            }
-
-            try {
-              var transaction = library.base.transaction.create({
-                type: TransactionTypes.VERIFIER,
-                verifierName: body.verifierName,
-                sender: account,
-                keypair: keypair,
-                secondKeypair: secondKeypair,
-                requester: keypair,
-                countryCode: body.countryCode
-              });
-            } catch (e) {
-              return cb(e.toString());
-            }
-            modules.transactions.receiveTransactions([transaction], cb);
-          });
-        });
-      } else {
-        modules.accounts.getAccount({publicKey: keypair.publicKey.toString('hex')}, function (err, account) {
-          library.logger.debug('=========================== after getAccount ==========================');
-          if (err) {
-            return cb(err.toString());
-          }
-          if (!account) {
-            return cb("Account not found");
-          }
-          if(account.isMerchant) {
-            return cb("Account is already registered as Merchant");
-          }
-          if(account.countryCode != body.countryCode) {
-            return cb("Account country code mismatched!");
-          }
-          if (account.secondSignature && !body.secondSecret) {
-            return cb("Invalid second passphrase");
-          }
-
-          var secondKeypair = null;
-
-          if (account.secondSignature) {
-            var secondHash = crypto.createHash('sha256').update(body.secondSecret, 'utf8').digest();
-            secondKeypair = ed.MakeKeypair(secondHash);
-          }
-
-          try {
-            var transaction = library.base.transaction.create({
-              type: TransactionTypes.VERIFIER,
-              verifierName: body.verifierName,
-              sender: account,
-              keypair: keypair,
-              secondKeypair: secondKeypair,
-              countryCode: body.countryCode
-            });
-          } catch (e) {
-            return cb(e.toString());
-          }
-          modules.transactions.receiveTransactions([transaction], cb);
-        });
-      }
-    }, function (err, transaction) {
-      if (err) {
-        return cb(err.toString());
-      }
-      cb(null, {transactionId: transaction[0].id });
-    });
-  });
-}
-
-shared.getVerifiers = function (req, cb) {
-  var query = req.body;
-  library.scheme.validate(query, {
-    type: 'object',
-    properties: {
-      address: {
-        type: "string",
-        minLength: 1
-      },
-      limit: {
-        type: "integer",
-        minimum: 0,
-        maximum: 101
-      },
-      offset: {
-        type: "integer",
-        minimum: 0
-      },
-      orderBy: {
-        type: "string"
-      }
-    }
-  }, function (err) {
-    if (err) {
-      return cb(err[0].message);
-    }
-
-    library.dbLite.query("SELECT count(*) FROM mem_accounts WHERE isVerifier=1", {}, ['count'], function(err, row) {
-      var count = row[0].count;
-      self.getAccounts({
-        isVerifier: 1,
-        offset: query.offset,
-        limit: query.limit,
-        sort: { "publicKey": 1 }
-      }, ["verifierName", "address", "publicKey", "vote", "missedblocks", "producedblocks", "countryCode"], function (err, verifiers) {
-        if (err) {
-          return cb(err.toString());
-        }
-        verifiers.forEach(function(verifier) {
-          verifier.address = verifier.address.concat(verifier.countryCode);
-        });
-        cb(null, {data: verifiers, count: count });
-      });
-    });
-  });
-}
-
-shared.getVerifier = function (req, cb) {
-  var query = req.body;
-  var queryJSON = {
-    isVerifier: 1
-  }; 
-  library.scheme.validate(query, {
-    type: "object",
-    properties: {
-      address: {
-        type: "string"
-      },
-      verifierName: {
-        type: "string"
-      }
-    }
-  }, function (err) {
-    if (err) {
-      return cb(err[0].message);
-    }
-
-    if(!(query.address || query.verifierName)) {
-      return cb("missing required params :address or verifierName");
-    }
-
-    if(query.address) {
-      var conCode = addressHelper.getCountryCodeFromAddress(query.address);
-      queryJSON.address = addressHelper.removeCountryCodeFromAddress(query.address);
-    }
-
-    if(query.verifierName) {
-      queryJSON.verifierName = query.verifierName;
-    }
-    
-    modules.accounts.getAccount(queryJSON, function(err, account) {
-      if(err) {
-        return cb(err);
-      }
-
-      if(!account) {
-        return cb("verifier not found");
-      }
-      if(!account.isVerifier) {
-        return cb("account is not verifier");
-      }
-      if(conCode != account.countryCode) {
-        return cb("country code mismatched!");
-      }
-      cb(null, {
-        address: account.address.concat((account.countryCode)? account.countryCode: ''),
-        publicKey: account.publicKey,
-        vote: account.vote,
-        producedblocks: account.producedblocks,
-        missedblocks: account.missedblocks,
-        countryCode: account.countryCode,
-        verifierName: account.verifierName,
-      });
-    });
-  });
-}
-
 shared.getAccount = function (req, cb) {
   var query = {};
   query.address = addressHelper.removeCountryCodeFromAddress(req.body.address);
@@ -2974,8 +2034,8 @@ shared.getAccounts = function (req, cb) {
   });
 }
 
-// Add Merchant transactions
-shared.enableKYCByMerchant = function (req, cb) {
+// Enable KYC on the behalf of user
+shared.enableKYCOnBehalfOfUser = function (req, cb) {
   var body = req.body;
   library.scheme.validate(body, {
     type: "object",
@@ -3107,7 +2167,7 @@ shared.enableKYCByMerchant = function (req, cb) {
 
               try {
                 var transaction = library.base.transaction.create({
-                  type: TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT,
+                  type: TransactionTypes.ENABLE_WALLET_KYC_ONBEHALF,
                   amount: body.amount,
                   sender: account,
                   recipientId: recipientId,
@@ -3135,9 +2195,6 @@ shared.enableKYCByMerchant = function (req, cb) {
             if (!account) {
               return cb("Account not found");
             }
-            if (!account.isMerchant) {
-              return cb("account is not merchant");
-            }
             
             if(account.countryCode != body.senderCountryCode) {
               return cb("Account country code mismatched!");
@@ -3160,7 +2217,7 @@ shared.enableKYCByMerchant = function (req, cb) {
 
             try {
               var transaction = library.base.transaction.create({
-                type: TransactionTypes.ENABLE_WALLET_KYC_BY_MERCHANT,
+                type: TransactionTypes.ENABLE_WALLET_KYC_ONBEHALF,
                 amount: body.amount,
                 sender: account,
                 recipientId: recipientId,

@@ -350,94 +350,6 @@ function Account(scope, cb) {
       type: "Text"
     },
     {
-      name: "merchantName",
-      type: "String",
-      length: 20,
-      filter: {
-        type: "string",
-        case: "lower",
-        maxLength: 20,
-        minLength: 1
-      },
-      conv: String,
-      constante: true
-    },
-    {
-      name: "u_merchantName",
-      type: "String",
-      length: 20,
-      filter: {
-        type: "string",
-        case: "lower",
-        maxLength: 20,
-        minLength: 1
-      },
-      conv: String,
-      constante: true
-    },
-    {
-      name: "isMerchant",
-      type: "BigInt",
-      filter: {
-        type: "boolean"
-      },
-      conv: Boolean,
-      default: 0
-    },
-    {
-      name: "u_isMerchant",
-      type: "BigInt",
-      filter: {
-        type: "boolean"
-      },
-      conv: Boolean,
-      default: 0
-    },
-    {
-      name: "isVerifier",
-      type: "BigInt",
-      filter: {
-        type: "boolean"
-      },
-      conv: Boolean,
-      default: 0
-    },
-    {
-      name: "u_isVerifier",
-      type: "BigInt",
-      filter: {
-        type: "boolean"
-      },
-      conv: Boolean,
-      default: 0
-    },
-    {
-      name: "verifierName",
-      type: "String",
-      length: 20,
-      filter: {
-        type: "string",
-        case: "lower",
-        maxLength: 20,
-        minLength: 1
-      },
-      conv: String,
-      constante: true
-    },
-    {
-      name: "u_verifierName",
-      type: "String",
-      length: 20,
-      filter: {
-        type: "string",
-        case: "lower",
-        maxLength: 20,
-        minLength: 1
-      },
-      conv: String,
-      constante: true
-    },
-    {
       name: "expDate",
       type: "BigInt",
       filter: {
@@ -675,7 +587,7 @@ Account.prototype.createTables = function (cb) {
         length: 20,
         not_null: true
       }, {
-        name: "merchantWalletAddress",
+        name: "onBehalfUserWalletAddress",
         type: "String",
         length: 64,
         not_null: false
@@ -694,16 +606,16 @@ Account.prototype.createTables = function (cb) {
   
   var sql = jsonSql.build({
     type: 'create',
-    table: this.table + "_merchant_trs",
+    table: this.table + "_onBehalf_doc_verification_payment",
     tableFields: [
       {
-        name: "merchantId",
+        name: "senderId",
         type: "String",
         length: 50,
         not_null: true
       },
       {
-        name: "merchantCountryCode",
+        name: "senderCountryCode",
         type: "String",
         length: 2
       }, 
@@ -753,7 +665,7 @@ Account.prototype.createTables = function (cb) {
     ],
     foreignKeys: [
       {
-        field: "merchantId",
+        field: "senderId",
         table: this.table,
         table_field: "address",
         on_delete: "cascade"
