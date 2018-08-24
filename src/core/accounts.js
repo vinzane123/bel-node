@@ -635,7 +635,7 @@ function AttachWallets () {
 
         library.dbLite.query(queryString, params, fields, function(err, row) {
           if(row && row[0] && row[0].status == 1) {
-            if(row[0].currency == 'BEL') {
+            if(row[0].currency == 'BEL' && row[0].currency == list.currency) {
               return setImmediate(cb, list.address + trs.countryCode + ' wallet already attached');
             } else {
               return setImmediate(cb, list.address + ' wallet already attached');
@@ -873,7 +873,7 @@ function attachWalletsOnBehalf () {
     
         library.dbLite.query(queryString, params, fields, function(err, row) {
           if(row && row[0] && row[0].status == 1) {
-            if(row[0].currency == 'BEL') {
+            if(row[0].currency == 'BEL' && row[0].currency == list.currency) {
               return setImmediate(cb, list.address + trs.asset.ac_wallets.attachFromCountryCode + ' wallet already attached');
             } else {
               return setImmediate(cb, list.address + ' wallet already attached');

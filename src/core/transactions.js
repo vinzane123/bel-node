@@ -180,7 +180,7 @@ function InitialTransfer() {
       return cb("Invalid recipient");
     }*/
 
-    if (trs.amount <= 0 || trs.amount > constants.initialAmount) {
+    if (trs.amount <= 0) {
       return cb("Invalid transaction amount");
     }
 
@@ -713,6 +713,7 @@ private.attachApi = function () {
     "get /wallet/info": "getWalletInfo",
     'get /attached/wallets': "getAttachedWallets",
     "put /onBehalf/attach/wallets": "attachWalletsOnBehalf",
+    "get /onBehalf/attached/wallets": "getAttachedWalletsOnBehalf",
     "put /onBehalf/doc/veri/payment": "onBehalfDocVerificationPayment",
     "get /onBehalf/doc/veri/payment/get": "getOnBehalfDocVerificationPayment"
   });
@@ -3588,40 +3589,128 @@ shared.getAttachedWallets = function (req, cb) {
       return cb(err[0].message);
     }
 
+    var conCode = addressHelper.getCountryCodeFromAddress(query.address);
     query.address = addressHelper.removeCountryCodeFromAddress(query.address);
-    
-    var queryString = "SELECT secondWalletAddress, currency, status " + 
-    "FROM mem_accounts_attach_wallets " +
-    "WHERE " +
-    "accountId= '"+query.address+"'";
+    modules.accounts.getAccount({address: query.address}, function(err, account) {
 
-    var fields = ['address', 'currency','status'];
-    var params = {};
-  
-    library.dbLite.query(queryString, params, fields, function(err, rows) {
-      if(err) {
-        return cb('Error occured while getting address info');
+      if(!account) {
+        return cb('account not fouund!');
+      }
+      if(account.countryCode != conCode) {
+        return cb('Address countryCode missmatched!');
+      }
+      var queryString = "SELECT secondWalletAddress, currency, status " + 
+      "FROM mem_accounts_attach_wallets " +
+      "WHERE " +
+      "accountId= '"+query.address+"'";
+
+      var fields = ['address', 'currency','status'];
+      var params = {};
+    
+      library.dbLite.query(queryString, params, fields, function(err, rows) {
+        if(err) {
+          return cb('Error occured while getting address info');
+        }
+        
+        if(!rows.length) {
+          return cb('Invalid address or currency');
+        }
+        var info = [];
+
+        async.eachSeries(rows, function (row, cb) {
+          if(row.currency == 'BEL') {
+            modules.accounts.getAccount({ 
+              address: row.address 
+            }, function (err, res) {
+              info.push({address: row.address.concat(res.countryCode), currency: row.currency, status: row.status});
+              cb();
+            });
+          } else {
+            info.push({address: row.address, currency: row.currency, status: row.status});
+            cb();
+          }  
+        }, function(err) {
+          cb(null, { info: info });
+        });
+      });
+    });
+  });
+}
+
+// get all attached wallets
+shared.getAttachedWalletsOnBehalf = function (req, cb) {
+  var query = req.body;
+
+  library.scheme.validate(query, {
+    type: 'object',
+    properties: {
+      address: {
+        type: 'string',
+        minLength: 1
+      },
+      offset: {
+        type: "integer",
+        minimum: 0
+      },
+      limit: {
+        type: "integer",
+        minimum: 1
+      }
+    },
+    required: ['address']
+  }, function (err) {
+    if (err) {
+      return cb(err[0].message);
+    }
+
+    var conCode = addressHelper.getCountryCodeFromAddress(query.address);
+    query.address = addressHelper.removeCountryCodeFromAddress(query.address);
+    modules.accounts.getAccount({address: query.address}, function(err, account) {
+
+      if(!account) {
+        return cb('account not fouund!');
+      }
+      if(account.countryCode != conCode) {
+        return cb('Address countryCode missmatched!');
       }
       
-      if(!rows.length) {
-        return cb('Invalid address or currency');
-      }
-      var info = [];
+      query.offset = (query.offset)? query.offset:0;
+      query.limit = (query.limit)? query.limit: 20;
 
-      async.eachSeries(rows, function (row, cb) {
-        if(row.currency == 'BEL') {
-          modules.accounts.getAccount({ 
-            address: row.address 
-          }, function (err, res) {
-            info.push({address: row.address.concat(res.countryCode), currency: row.currency, status: row.status});
-            cb();
-          });
-        } else {
-          info.push({address: row.address, currency: row.currency, status: row.status});
-          cb();
-        }  
-      }, function(err) {
-        cb(null, { info: info });
+      var queryString = "SELECT secondWalletAddress, currency, status, accountId, onBehalfUserWalletAddress " + 
+      "FROM mem_accounts_attach_wallets " +
+      "WHERE " +
+      "onBehalfUserWalletAddress= '"+query.address+"'" + 
+      " limit " +query.limit + " offset " + query.offset;
+
+      var fields = ['attachedAddress', 'currency','status', 'senderId', 'attachFrom'];
+      var params = {};
+    
+      library.dbLite.query(queryString, params, fields, function(err, rows) {
+        if(err) {
+          return cb('Error occured while getting address info');
+        }
+        
+        if(!rows.length) {
+          return cb('Invalid address');
+        }
+        var info = [];
+        var countryCode;
+        async.eachSeries(rows, function (row, cb) {
+            modules.accounts.getAccount({ 
+              address: row.attachFrom 
+            }, function (err, res) {
+              if(row.currency == 'BEL') {
+                info.push({attachFrom: row.attachFrom.concat(res.countryCode), attachedAddress: row.attachedAddress.concat(res.countryCode), currency: row.currency, status: row.status});
+                cb();
+              } else {
+                info.push({attachFrom: row.attachFrom.concat(res.countryCode), attachedAddress: row.attachedAddress, currency: row.currency, status: row.status});
+                cb();
+              }
+            });
+        }, function(err) {
+          cb(null, { info: info });
+        });
       });
     });
   });
