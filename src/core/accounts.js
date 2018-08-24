@@ -2200,6 +2200,10 @@ shared.enableKYCOnBehalfOfUser = function (req, cb) {
               return cb("Account country code mismatched!");
             }
 
+            if(!account.status) {
+              return cb(account.address.concat(account.countryCode) + " wallet is not verified.");
+            }
+
             if(addressHelper.generateAddressWithCountryCode(account.address, account.countryCode) != addressHelper.generateAddressWithCountryCode(address, body.senderCountryCode)) {
               return cb("Account Address mismatched!");
             }
