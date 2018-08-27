@@ -714,9 +714,9 @@ Blocks.prototype.loadBlocksOffset = function (limit, offset, verify, cb) {
               // apply genesis block
               library.miner.minerAddresses.forEach(function(data) {
                 block.transactions.forEach(function(trs) {
-                  if(trs.senderId == addressHelper.removeCountryCodeFromAddress(data.address)) {
+                  //if(trs.senderId == addressHelper.removeCountryCodeFromAddress(data.address)) {
                     trs.countryCode = 'IN' //data.countryCode;
-                  }
+                  //}
                 });
               });
               self.applyBlock(block, null, false, false, next);

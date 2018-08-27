@@ -1076,7 +1076,12 @@ function EnableKYCByOnBehalfOfUser () {
     }
     library.oneoff.set(key, true);*/
     
+    if(!sender.status) {
+      return cb(sender.address.concat(sender.countryCode) + " wallet is not verified.");
+    }
     return setImmediate(cb, null, trs);
+    
+  
 	};
 
 	this.getBytes = function (trs) {
