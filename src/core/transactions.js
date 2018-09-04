@@ -917,51 +917,64 @@ shared.getTransactionsMulti = function(req, cb) {
     var params = {};
     
     addresses =  addresses.map((address) => "'"+addressHelper.removeCountryCodeFromAddress(address)+"'").join(',');
-    var query = "select t.id, b.height, t.blockId, t.type, t.timestamp, lower(hex(t.senderPublicKey)), t.senderId, t.recipientId, t.amount, t.fee, lower(hex(t.signature)), lower(hex(t.signSignature)), t.signatures, t.args, t.message, (select max(height) + 1 from blocks) - b.height " +
-    "from trs t " +  
-    "inner join blocks b on t.blockId = b.id " +
-    "where t.senderId IN (" + addresses + ")" + "or " +
-    "t.recipientId IN (" +addresses+ ") " +
-    (filter.orderBy ? 'order by ' + sortBy + ' ' + sortMethod : '') + " " +
-    (filter.limit ? "limit " + filter.limit  : '') + " " +
-    (filter.offset ? "offset " + filter.offset  : '');
     
-    var cols = ['t_id', 'b_height', 't_blockId', 't_type', 't_timestamp', 't_senderPublicKey', 't_senderId', 't_recipientId', 't_amount', 't_fee', 't_signature', 't_signSignature', 't_signatures', 't_args', 't_message', 'confirmations'];
-    library.dbLite.query(query, params, cols, function(err, rows) {
+    var countQuery = "SELECT count(id) FROM trs " +
+      "WHERE senderId IN (" + addresses + ")" + "or " +
+      "recipientId IN (" +addresses+ ") ";
+
+    library.dbLite.query(countQuery, params, { "count": Number }, function (err, rows) {
       if (err) {
         return cb(err);
       }
-      var transactions = [];
-      for (var i = 0; i < rows.length; i++) {
-        transactions.push(library.base.transaction.dbRead(rows[i]));
-      }
-      var addr = [];
-      transactions.forEach(function(trs, index) {
-        if(trs.senderId)
-        addr.push(trs.senderId);
-        if(trs.recipientId)
-        addr.push(trs.recipientId);
-      });
-      modules.accounts.getAccounts({
-        address: {$in: addr}
-      }, ['address', "countryCode"], function (err, rows) {
+
+      var count = rows.length ? rows[0].count : 0;
+      
+      var query = "select t.id, b.height, t.blockId, t.type, t.timestamp, lower(hex(t.senderPublicKey)), t.senderId, t.recipientId, t.amount, t.fee, lower(hex(t.signature)), lower(hex(t.signSignature)), t.signatures, t.args, t.message, (select max(height) + 1 from blocks) - b.height " +
+      "from trs t " +  
+      "inner join blocks b on t.blockId = b.id " +
+      "where t.senderId IN (" + addresses + ")" + "or " +
+      "t.recipientId IN (" +addresses+ ") " +
+      (filter.orderBy ? 'order by ' + sortBy + ' ' + sortMethod : '') + " " +
+      (filter.limit ? "limit " + filter.limit  : '') + " " +
+      (filter.offset ? "offset " + filter.offset  : '');
+      
+      var cols = ['t_id', 'b_height', 't_blockId', 't_type', 't_timestamp', 't_senderPublicKey', 't_senderId', 't_recipientId', 't_amount', 't_fee', 't_signature', 't_signSignature', 't_signatures', 't_args', 't_message', 'confirmations'];
+      library.dbLite.query(query, params, cols, function(err, rows) {
         if (err) {
-          return cb("Database error");
+          return cb(err);
         }
-        
-        rows.forEach(function(row, index1) {
-          transactions.forEach(function(trs, index2) {
-            if(row.address == trs.senderId) {
-              trs.senderCountryCode = row.countryCode;
-              trs.senderId = trs.senderId + ((row && row.countryCode)? row.countryCode: '');
-            }
-            if(row.address == trs.recipientId) {
-              trs.recepientCountryCode = row.countryCode;
-              trs.recipientId = trs.recipientId + ((row && row.countryCode)? row.countryCode: '');
-            }
-          });
+        var transactions = [];
+        for (var i = 0; i < rows.length; i++) {
+          transactions.push(library.base.transaction.dbRead(rows[i]));
+        }
+        var addr = [];
+        transactions.forEach(function(trs, index) {
+          if(trs.senderId)
+          addr.push(trs.senderId);
+          if(trs.recipientId)
+          addr.push(trs.recipientId);
         });
-        cb(null, { transactions: transactions, count: transactions.length });
+        modules.accounts.getAccounts({
+          address: {$in: addr}
+        }, ['address', "countryCode"], function (err, rows) {
+          if (err) {
+            return cb("Database error");
+          }
+          
+          rows.forEach(function(row, index1) {
+            transactions.forEach(function(trs, index2) {
+              if(row.address == trs.senderId) {
+                trs.senderCountryCode = row.countryCode;
+                trs.senderId = trs.senderId + ((row && row.countryCode)? row.countryCode: '');
+              }
+              if(row.address == trs.recipientId) {
+                trs.recepientCountryCode = row.countryCode;
+                trs.recipientId = trs.recipientId + ((row && row.countryCode)? row.countryCode: '');
+              }
+            });
+          });
+          cb(null, { transactions: transactions, count: count });
+        });
       });
     });
   });
