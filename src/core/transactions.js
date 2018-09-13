@@ -199,7 +199,23 @@ function InitialTransfer() {
   }
 
   this.process = function (trs, sender, cb) {
-    setImmediate(cb, null, trs);
+    library.dbLite.query("SELECT type, amount FROM trs WHERE type='"+trs.type+"' AND recipientId='"+trs.recipientId+"'", {}, ['type', 'amount'], function(err, rows) {
+      var amount = 0;
+      rows.forEach(function(row, index) {
+        amount += parseInt(row.amount);
+      });
+    
+      var totalAmount = amount + trs.amount; 
+      if(totalAmount > constants.maxDocVerificationAmount * constants.fixedPoint) {
+        return cb('Initial amount exceeds, your amount transfer remaining: '+ (constants.maxDocVerificationAmount * constants.fixedPoint - amount));
+      }
+      /*var key = trs.recipientId + ':' + trs.type
+      if (library.oneoff.has(key)) {
+        return setImmediate(cb, 'Double submit')
+      }
+      library.oneoff.set(key, true);*/
+      setImmediate(cb, null, trs);
+    });
   }
 
   this.getBytes = function (trs) {
@@ -229,6 +245,8 @@ function InitialTransfer() {
         cb(err);
       });
     });
+    //var key = trs.recipientId + ':' + trs.type
+    //library.oneoff.delete(key)
   }
 
   this.undo = function (trs, block, sender, cb) {
