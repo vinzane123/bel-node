@@ -109,19 +109,19 @@ function Transfer() {
 
   this.applyUnconfirmed = function (trs, sender, cb) {
     modules.accounts.getAccount({address: trs.recipientId}, function(err, account) {
-      if(!account) {
-        var idKey = sender.address + ':' + trs.type
+      if(!account || account.status != 1) {
+        var idKey = trs.recipientId + ':' + trs.type
         if (library.oneoff.has(idKey)) {
           return setImmediate(cb, 'Double submit')
         }
         library.oneoff.set(idKey, true)
-      }
+      } 
       setImmediate(cb);
     });
   }
 
   this.undoUnconfirmed = function (trs, sender, cb) {
-    var idKey = sender.address + ':' + trs.type;
+    var idKey = trs.recipientId + ':' + trs.type;
     library.oneoff.delete(idKey);
     setImmediate(cb);
   }
@@ -199,23 +199,7 @@ function InitialTransfer() {
   }
 
   this.process = function (trs, sender, cb) {
-    library.dbLite.query("SELECT type, amount FROM trs WHERE type='"+trs.type+"' AND recipientId='"+trs.recipientId+"'", {}, ['type', 'amount'], function(err, rows) {
-      var amount = 0;
-      rows.forEach(function(row, index) {
-        amount += parseInt(row.amount);
-      });
-    
-      var totalAmount = amount + trs.amount; 
-      if(totalAmount > constants.maxDocVerificationAmount * constants.fixedPoint) {
-        return cb('Initial amount exceeds, your amount transfer remaining: '+ (constants.maxDocVerificationAmount * constants.fixedPoint - amount));
-      }
-      /*var key = trs.recipientId + ':' + trs.type
-      if (library.oneoff.has(key)) {
-        return setImmediate(cb, 'Double submit')
-      }
-      library.oneoff.set(key, true);*/
-      setImmediate(cb, null, trs);
-    });
+    setImmediate(cb, null, trs);
   }
 
   this.getBytes = function (trs) {
@@ -245,8 +229,6 @@ function InitialTransfer() {
         cb(err);
       });
     });
-    //var key = trs.recipientId + ':' + trs.type
-    //library.oneoff.delete(key)
   }
 
   this.undo = function (trs, block, sender, cb) {
@@ -1253,7 +1235,22 @@ private.checkVrificationOnKYCWithoutAPI = function(sender, trs, cb) {
   } else {
 		modules.accounts.getAccount({address : recipientId}, function (err, row){
       if(!row && trs.type === TransactionTypes.SEND) {
+        if(trs.amount > constants.maxDocVerificationAmount * constants.fixedPoint) {
+          return cb('You can transfer only 25 BEL to unverified user');
+        } 
         cb();
+      } else if(row && row.status != 1 && trs.type === TransactionTypes.SEND) {
+        library.dbLite.query("SELECT type, amount FROM trs WHERE type='"+trs.type+"' AND recipientId='"+trs.recipientId+"'", {}, ['type', 'amount'], function(err, rows) {
+          var amount = 0;
+          rows.forEach(function(rowTrs, index) {
+            amount += parseInt(rowTrs.amount);
+          });
+          var totalAmount = amount + trs.amount; 
+          if(totalAmount > constants.maxDocVerificationAmount * constants.fixedPoint) {
+            return cb('transfer amount exceeds, your amount transfer remaining: '+ (constants.maxDocVerificationAmount * constants.fixedPoint - amount));
+          }
+          cb();          
+        });
       } else if(!row || row.status != 1 || row.expDate < new Date().getTime()){
 				cb(recipientId + ((row && row.countryCode)? row.countryCode: '') +' wallet is not verified.');
 			} else {
