@@ -18,7 +18,7 @@ module.exports = {
   totalAmount: 2100000000000000000,
   initialSupply: 174200000000000000,
   maxTxsPerBlock: 500,
-  initialAmount: 20000000000,
+  maxDocVerificationAmount: 25,
   expDateOfKYC: 2, // default exp date of kyc in years
   defaultCurrency: 'BEL', // default currency symbole for Belrium
   maxWhiteListWallets: 10,
