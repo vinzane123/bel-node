@@ -798,6 +798,10 @@ private.list = function (filter, cb) {
     params.message = filter.message
   }
 
+  if(filter.fromTimestamp) {
+    fields_or.push('t.timestamp >= ' + filter.fromTimestamp);
+  }
+
   if (filter.limit) {
     params.limit = filter.limit;
   } else {
@@ -846,6 +850,7 @@ private.list = function (filter, cb) {
       var count = rows.length ? rows[0].count : 0;
 
       // Need to fix 'or' or 'and' in query
+      
       library.dbLite.query("select t.id, b.height, t.blockId, t.type, t.timestamp, lower(hex(t.senderPublicKey)), t.senderId, t.recipientId, t.amount, t.fee, lower(hex(t.signature)), lower(hex(t.signSignature)), t.signatures, t.args, t.message, (select max(height) + 1 from blocks) - b.height " +
         "from trs t " +
         "inner join blocks b on t.blockId = b.id " + uiaCurrencyJoin +
@@ -1508,6 +1513,10 @@ shared.getTransactions = function (req, cb) {
         type:"integer",
         minimum: 0,
         maximum: 1
+      },
+      fromTimestamp: {
+        type: "integer",
+        minimum: 0
       }
     }
   }, function (err) {
