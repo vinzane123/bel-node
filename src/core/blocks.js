@@ -949,7 +949,11 @@ Blocks.prototype.applyBlock = function (block, votes, broadcast, saveBlock, call
     async.eachSeries(sortedTrs, function (transaction, nextTr) {
       async.waterfall([
         function (next) {
-          modules.accounts.setAccountAndGet({ publicKey: transaction.senderPublicKey, isGenesis: block.height == 1, countryCode: transaction.countryCode }, next);
+          var data = { publicKey: transaction.senderPublicKey, isGenesis: block.height == 1 };
+          if(transaction.countryCode) {
+            data.countryCode = transaction.countryCode;
+          }
+          modules.accounts.setAccountAndGet(data, next);
         },
         function (sender, next) {
           // if (modules.transactions.hasUnconfirmedTransaction(transaction)) {
@@ -1059,7 +1063,11 @@ Blocks.prototype.processBlock = function (block, votes, broadcast, save, verifyT
         async.eachSeries(block.transactions, function (transaction, next) {
           async.waterfall([
             function (next) {
-              modules.accounts.setAccountAndGet({ publicKey: transaction.senderPublicKey }, next)
+              var data = { publicKey: transaction.senderPublicKey };
+              if(transaction.countryCode) {
+                data.countryCode = transaction.countryCode;
+              }
+              modules.accounts.setAccountAndGet(data, next)
             },
             function (sender, next) {
               try {
