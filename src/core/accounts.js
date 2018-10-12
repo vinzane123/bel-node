@@ -744,7 +744,7 @@ function AttachWallets () {
               if(trs.asset.ac_wallets.currencyType == 'BEL') {
                 modules.accounts.setAccountAndGet({ 
                   address: list.address, 
-                  countryCode: trs.countryCode,
+                  countryCode: sender.countryCode,
                   status: trs.asset.ac_wallets.status,
                   u_status: trs.asset.ac_wallets.status,
                   expDate: sender.expDate 
